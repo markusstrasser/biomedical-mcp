@@ -73,7 +73,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             entity_type: Filter to "target", "disease", or "drug". None searches all.
             limit: Max results (default 10, max 50).
         """
-        ot: OpenTargets = ctx.request_context["ot"]
+        ot: OpenTargets = ctx.lifespan_context["ot"]
         hits = ot.search(query, entity_type=entity_type, limit=limit)
         return {"query": query, "total": len(hits), "hits": hits}
 
@@ -85,7 +85,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             gene_symbol: Gene symbol (e.g. "BRCA1", "CYP2D6"). Resolved via OT search.
             ensembl_id: Ensembl gene ID (e.g. "ENSG00000012048"). Takes priority.
         """
-        ot: OpenTargets = ctx.request_context["ot"]
+        ot: OpenTargets = ctx.lifespan_context["ot"]
         eid = ot.resolve_target(gene_symbol=gene_symbol, ensembl_id=ensembl_id)
         if not eid:
             return {"error": f"Could not resolve target: gene_symbol={gene_symbol}, ensembl_id={ensembl_id}"}
@@ -103,7 +103,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             ensembl_id: Ensembl gene ID.
             limit: Max associations (default 25, max 100).
         """
-        ot: OpenTargets = ctx.request_context["ot"]
+        ot: OpenTargets = ctx.lifespan_context["ot"]
         eid = ot.resolve_target(gene_symbol=gene_symbol, ensembl_id=ensembl_id)
         if not eid:
             return {"error": f"Could not resolve target: gene_symbol={gene_symbol}, ensembl_id={ensembl_id}"}
@@ -117,7 +117,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             disease_id: EFO disease ID (e.g. "EFO_0000305" for breast carcinoma). Use ot_search to find IDs.
             limit: Max targets (default 25, max 100).
         """
-        ot: OpenTargets = ctx.request_context["ot"]
+        ot: OpenTargets = ctx.lifespan_context["ot"]
         return ot.disease_targets(disease_id, limit=limit)
 
     @mcp.tool()
@@ -128,7 +128,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             gene_symbol: Gene symbol (e.g. "CYP2D6", "CYP3A4").
             ensembl_id: Ensembl gene ID.
         """
-        ot: OpenTargets = ctx.request_context["ot"]
+        ot: OpenTargets = ctx.lifespan_context["ot"]
         eid = ot.resolve_target(gene_symbol=gene_symbol, ensembl_id=ensembl_id)
         if not eid:
             return {"error": f"Could not resolve target: gene_symbol={gene_symbol}, ensembl_id={ensembl_id}"}
@@ -142,7 +142,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             drug_name: Drug name (e.g. "ibuprofen"). Resolved via OT search.
             chembl_id: ChEMBL compound ID (e.g. "CHEMBL521"). Takes priority.
         """
-        ot: OpenTargets = ctx.request_context["ot"]
+        ot: OpenTargets = ctx.lifespan_context["ot"]
         cid = ot.resolve_drug(drug_name=drug_name, chembl_id=chembl_id)
         if not cid:
             return {"error": f"Could not resolve drug: drug_name={drug_name}, chembl_id={chembl_id}"}
@@ -161,7 +161,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             name: Drug/compound name (e.g. "ibuprofen").
             chembl_id: ChEMBL molecule ID (e.g. "CHEMBL521").
         """
-        chembl_client: ChEMBL = ctx.request_context["chembl"]
+        chembl_client: ChEMBL = ctx.lifespan_context["chembl"]
         cid = chembl_client.resolve_compound(name=name, chembl_id=chembl_id)
         if not cid:
             return {"error": f"Could not resolve compound: name={name}, chembl_id={chembl_id}"}
@@ -176,7 +176,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             chembl_id: ChEMBL target ID (e.g. "CHEMBL203").
             uniprot_id: UniProt accession (e.g. "P00533").
         """
-        chembl_client: ChEMBL = ctx.request_context["chembl"]
+        chembl_client: ChEMBL = ctx.lifespan_context["chembl"]
         result = chembl_client.target(gene_symbol=gene_symbol, chembl_id=chembl_id, uniprot_id=uniprot_id)
         if not result:
             return {"error": f"Target not found: gene_symbol={gene_symbol}, chembl_id={chembl_id}, uniprot_id={uniprot_id}"}
@@ -190,7 +190,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             compound_name: Drug name (e.g. "ibuprofen").
             chembl_id: ChEMBL molecule ID.
         """
-        chembl_client: ChEMBL = ctx.request_context["chembl"]
+        chembl_client: ChEMBL = ctx.lifespan_context["chembl"]
         cid = chembl_client.resolve_compound(name=compound_name, chembl_id=chembl_id)
         if not cid:
             return {"error": f"Could not resolve compound: name={compound_name}, chembl_id={chembl_id}"}
@@ -205,7 +205,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             target_chembl_id: ChEMBL target ID (e.g. "CHEMBL203"). Use chembl_target to find IDs.
             limit: Max results (default 25, max 100).
         """
-        chembl_client: ChEMBL = ctx.request_context["chembl"]
+        chembl_client: ChEMBL = ctx.lifespan_context["chembl"]
         activities = chembl_client.bioactivity(target_chembl_id, limit=limit)
         return {"target_chembl_id": target_chembl_id, "activities": activities}
 
@@ -218,7 +218,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             chembl_id: ChEMBL molecule ID.
             limit: Max results (default 25, max 100).
         """
-        chembl_client: ChEMBL = ctx.request_context["chembl"]
+        chembl_client: ChEMBL = ctx.lifespan_context["chembl"]
         cid = chembl_client.resolve_compound(name=compound_name, chembl_id=chembl_id)
         if not cid:
             return {"error": f"Could not resolve compound: name={compound_name}, chembl_id={chembl_id}"}
@@ -245,7 +245,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             status: Filter by status: RECRUITING, COMPLETED, ACTIVE_NOT_RECRUITING, etc.
             limit: Max results (default 20, max 100).
         """
-        ct_client: ClinicalTrials = ctx.request_context["ct"]
+        ct_client: ClinicalTrials = ctx.lifespan_context["ct"]
         return ct_client.search(condition=condition, intervention=intervention, gene=gene, status=status, limit=limit)
 
     @mcp.tool()
@@ -255,7 +255,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
         Args:
             nct_id: ClinicalTrials.gov identifier (e.g. "NCT04379596").
         """
-        ct_client: ClinicalTrials = ctx.request_context["ct"]
+        ct_client: ClinicalTrials = ctx.lifespan_context["ct"]
         return ct_client.trial_detail(nct_id)
 
     @mcp.tool()
@@ -265,7 +265,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
         Args:
             condition: Disease/condition (e.g. "lung cancer").
         """
-        ct_client: ClinicalTrials = ctx.request_context["ct"]
+        ct_client: ClinicalTrials = ctx.lifespan_context["ct"]
         return ct_client.stats(condition)
 
     # ── ICD-10 ────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             query: Search term (e.g. "diabetes", "hypertension").
             limit: Max results (default 10, max 50).
         """
-        icd10_client: ICD10 = ctx.request_context["icd10"]
+        icd10_client: ICD10 = ctx.lifespan_context["icd10"]
         results = icd10_client.search(query, limit=limit)
         return {"query": query, "results": results}
 
@@ -289,7 +289,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
         Args:
             code: ICD-10-CM code (e.g. "E11", "E11.65").
         """
-        icd10_client: ICD10 = ctx.request_context["icd10"]
+        icd10_client: ICD10 = ctx.lifespan_context["icd10"]
         result = icd10_client.lookup(code)
         if not result:
             return {"error": f"ICD-10 code not found: {code}"}
@@ -315,7 +315,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             state: Two-letter state code (e.g. "CA", "NY").
             limit: Max results (default 10, max 200).
         """
-        npi_client: NPI = ctx.request_context["npi"]
+        npi_client: NPI = ctx.lifespan_context["npi"]
         results = npi_client.search(name=name, specialty=specialty, city=city, state=state, limit=limit)
         return {"results": results, "count": len(results)}
 
@@ -326,7 +326,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
         Args:
             npi: 10-digit NPI number.
         """
-        npi_client: NPI = ctx.request_context["npi"]
+        npi_client: NPI = ctx.lifespan_context["npi"]
         result = npi_client.lookup(npi)
         if not result:
             return {"error": f"NPI not found: {npi}"}
@@ -341,7 +341,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
         Args:
             variant_id: rsID (e.g. "rs1805007"), HGVS (e.g. "chr16:g.89919683C>T"), or dbSNP-style ID.
         """
-        mv: MyVariant = ctx.request_context["myvariant"]
+        mv: MyVariant = ctx.lifespan_context["myvariant"]
         return mv.lookup(variant_id)
 
     @mcp.tool()
@@ -353,7 +353,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             significance: Filter by significance (e.g. "Pathogenic", "Likely pathogenic", "Benign").
             limit: Max results (default 25, max 100).
         """
-        mv: MyVariant = ctx.request_context["myvariant"]
+        mv: MyVariant = ctx.lifespan_context["myvariant"]
         variants = mv.clinvar_search(gene_symbol, significance=significance, limit=limit)
         return {"gene": gene_symbol, "significance_filter": significance, "count": len(variants), "variants": variants}
 
@@ -364,7 +364,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
         Args:
             variant_ids: List of rsIDs or HGVS IDs (max 100).
         """
-        mv: MyVariant = ctx.request_context["myvariant"]
+        mv: MyVariant = ctx.lifespan_context["myvariant"]
         results = mv.batch(variant_ids)
         return {"count": len(results), "variants": results}
 
@@ -380,7 +380,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             serious: Filter by seriousness (True = serious only, False = non-serious only).
             limit: Max results (default 25, max 100).
         """
-        fda: OpenFDA = ctx.request_context["openfda"]
+        fda: OpenFDA = ctx.lifespan_context["openfda"]
         return fda.adverse_events(drug_name, reaction=reaction, serious=serious, limit=limit)
 
     @mcp.tool()
@@ -391,7 +391,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             drug_name: Generic drug name (e.g. "metformin", "warfarin").
             sections: Specific sections to return. Options: boxed_warning, warnings, dosage_and_administration, drug_interactions, adverse_reactions, indications_and_usage, contraindications, clinical_pharmacology, pharmacokinetics, use_in_specific_populations. Default: all.
         """
-        fda: OpenFDA = ctx.request_context["openfda"]
+        fda: OpenFDA = ctx.lifespan_context["openfda"]
         return fda.drug_label(drug_name, sections=sections)
 
     @mcp.tool()
@@ -403,7 +403,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             classification: Filter by class ("Class I" = most serious, "Class II", "Class III").
             limit: Max results (default 25, max 100).
         """
-        fda: OpenFDA = ctx.request_context["openfda"]
+        fda: OpenFDA = ctx.lifespan_context["openfda"]
         return fda.recalls(drug_name, classification=classification, limit=limit)
 
     # ── UniProt ────────────────────────────────────────────────────
@@ -416,7 +416,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             accession: UniProt accession (e.g. "P38398" for BRCA1).
             gene_symbol: Gene symbol (e.g. "BRCA1"). Resolved to human reviewed entry.
         """
-        up: UniProt = ctx.request_context["uniprot"]
+        up: UniProt = ctx.lifespan_context["uniprot"]
         result = up.protein(accession=accession, gene_symbol=gene_symbol)
         if not result:
             return {"error": f"Protein not found: accession={accession}, gene_symbol={gene_symbol}"}
@@ -431,7 +431,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             gene_symbol: Gene symbol (e.g. "TP53").
             limit: Max variants (default 50).
         """
-        up: UniProt = ctx.request_context["uniprot"]
+        up: UniProt = ctx.lifespan_context["uniprot"]
         result = up.variants(accession=accession, gene_symbol=gene_symbol, limit=limit)
         if not result:
             return {"error": f"Protein not found: accession={accession}, gene_symbol={gene_symbol}"}
@@ -446,7 +446,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             organism: Organism filter (default "human"). Use NCBI taxonomy ID for non-human.
             limit: Max results (default 10, max 50).
         """
-        up: UniProt = ctx.request_context["uniprot"]
+        up: UniProt = ctx.lifespan_context["uniprot"]
         results = up.search(query, organism=organism, limit=limit)
         return {"query": query, "count": len(results), "results": results}
 
@@ -459,7 +459,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
         Args:
             gene_id: Gene symbol (e.g. "CYP2D6"), Entrez ID (e.g. "1565"), or Ensembl ID (e.g. "ENSG00000100197").
         """
-        mg: MyGene = ctx.request_context["mygene"]
+        mg: MyGene = ctx.lifespan_context["mygene"]
         result = mg.gene_info(gene_id)
         if not result:
             return {"error": f"Gene not found: {gene_id}"}
@@ -474,7 +474,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
             species: Species filter (default "human").
             limit: Max results (default 10, max 50).
         """
-        mg: MyGene = ctx.request_context["mygene"]
+        mg: MyGene = ctx.lifespan_context["mygene"]
         results = mg.search(query, species=species, limit=limit)
         return {"query": query, "count": len(results), "results": results}
 
