@@ -4,7 +4,7 @@ version = "0.2.0"
 description = "Biomedical data MCP server — 14 APIs, 44 tools for genes, drugs, variants, proteins, pathways, interactions, structures"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp>=3.0",
+    "fastmcp>=3.0,<4.0",
     "httpx>=0.27",
     "tenacity>=9.0",
 ]
