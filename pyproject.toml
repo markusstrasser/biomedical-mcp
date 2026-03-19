@@ -1,7 +1,7 @@
 [project]
 name = "biomedical-mcp"
-version = "0.3.0"
-description = "Biomedical data MCP server — 14 APIs, 44 tools for genes, drugs, variants, proteins, pathways, interactions, structures"
+version = "0.4.0"
+description = "Biomedical MCP server — 27 APIs, ~80 tools across 15 domains (genes, drugs, variants, proteins, pathways, population, expression, panels, phenotype, GWAS, literature, composite)"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=3.0,<4.0",
