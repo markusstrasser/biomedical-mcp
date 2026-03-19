@@ -52,15 +52,16 @@ class GTEx(BaseClient):
         if cached is not None:
             return {**cached, "_cache_hit": True}
 
-        data = self._get("/expression/medianGeneExpression", params={"gencodeId": gencode_id})
+        data = self._get("/expression/medianGeneExpression",
+                         params={"gencodeId": gencode_id, "datasetId": "gtex_v8"})
 
+        raw_items = data.get("data", []) if isinstance(data, dict) else data if isinstance(data, list) else []
         tissues = []
-        for entry in (data.get("medianGeneExpression") or data if isinstance(data, list) else []):
+        for entry in raw_items:
             tpm = entry.get("median", 0)
             if tpm >= MIN_TPM_THRESHOLD:
                 tissues.append({
-                    "tissue": entry.get("tissueSiteDetailId"),
-                    "tissue_name": entry.get("tissueSiteDetail"),
+                    "tissue_id": entry.get("tissueSiteDetailId"),
                     "median_tpm": round(tpm, 2),
                 })
 

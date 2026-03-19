@@ -23,10 +23,14 @@ class GWASCatalog(BaseClient):
         if cached is not None:
             return {**cached, "_cache_hit": True}
 
-        data = self._get(
-            f"/singleNucleotidePolymorphisms/{rsid}/associations",
-            params={"projection": "associationBySnp"},
-        )
+        try:
+            data = self._get(
+                f"/singleNucleotidePolymorphisms/{rsid}/associations",
+                params={"projection": "associationBySnp"},
+            )
+        except Exception:
+            return {"rsid": rsid, "association_count": 0, "associations": [],
+                    "note": "Variant not found in GWAS Catalog"}
         associations = self._extract_associations(data, limit)
         result = {
             "rsid": rsid,
@@ -43,7 +47,11 @@ class GWASCatalog(BaseClient):
         if cached is not None:
             return {**cached, "_cache_hit": True}
 
-        data = self._get(f"/genes/{gene_symbol}/associations")
+        try:
+            data = self._get(f"/genes/{gene_symbol}/associations")
+        except Exception:
+            return {"gene_symbol": gene_symbol, "association_count": 0, "associations": [],
+                    "note": "No GWAS associations found (gene may not be in GWAS Catalog)"}
         associations = self._extract_associations(data, limit)
         result = {
             "gene_symbol": gene_symbol,

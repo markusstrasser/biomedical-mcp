@@ -94,8 +94,9 @@ class GnomAD(BaseClient):
                     pop_ac = pop.get("ac", 0)
                     pop_an = pop.get("an", 0)
                     pops[pop["id"]] = round(pop_ac / pop_an, 6) if pop_an > 0 else 0
+                raw_af = src_data.get("af")
                 result[source] = {
-                    "af": src_data.get("af"),
+                    "af": round(raw_af, 6) if raw_af else None,
                     "ac": src_data.get("ac"),
                     "an": src_data.get("an"),
                     "populations": pops,

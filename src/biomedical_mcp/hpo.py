@@ -80,21 +80,47 @@ class HPO(BaseClient):
         return result
 
     def gene_phenotypes(self, gene_symbol: str) -> dict:
-        """Get HPO phenotypes associated with a gene."""
+        """Get HPO phenotypes associated with a gene.
+
+        Uses Monarch Initiative API (HPO Jax doesn't support gene→phenotype lookup).
+        """
         key = self._cache_key("gene_pheno", gene_symbol)
         cached = self.cache.get(key, max_age_days=self.ttl_days)
         if cached is not None:
             return {**cached, "_cache_hit": True}
 
-        data = self._get(f"/hp/genes/{gene_symbol}/terms")
-        terms = data.get("terms", []) if isinstance(data, dict) else data if isinstance(data, list) else []
+        # Step 1: resolve gene symbol to HGNC ID via Monarch search
+        import httpx
+        monarch_base = "https://api.monarchinitiative.org/v3/api"
+        try:
+            resp = httpx.get(f"{monarch_base}/search",
+                             params={"q": gene_symbol, "category": "biolink:Gene", "limit": 1},
+                             timeout=15)
+            resp.raise_for_status()
+            items = resp.json().get("items", [])
+            if not items:
+                return {"gene_symbol": gene_symbol, "phenotype_count": 0, "phenotypes": [],
+                        "note": "Gene not found in Monarch"}
+            hgnc_id = items[0].get("id")
+
+            # Step 2: get gene→phenotype associations
+            resp2 = httpx.get(f"{monarch_base}/association",
+                              params={"subject": hgnc_id, "predicate": "biolink:has_phenotype", "limit": 100},
+                              timeout=15)
+            resp2.raise_for_status()
+            assocs = resp2.json().get("items", [])
+        except Exception as exc:
+            return {"gene_symbol": gene_symbol, "error": str(exc)}
+
+        phenotypes = [
+            {"hpo_id": a.get("object"), "name": a.get("object_label")}
+            for a in assocs if a.get("object", "").startswith("HP:")
+        ]
         result = {
             "gene_symbol": gene_symbol,
-            "phenotype_count": len(terms),
-            "phenotypes": [
-                {"hpo_id": t.get("id"), "name": t.get("name")}
-                for t in terms
-            ],
+            "monarch_id": hgnc_id,
+            "phenotype_count": len(phenotypes),
+            "phenotypes": phenotypes,
         }
         self.cache.set(key, result)
         return result

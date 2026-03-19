@@ -66,6 +66,10 @@ def create_server(cache: Cache) -> FastMCP:
         )
         mv_result, lit_result, gn_result = results
 
+        # MyVariant returns a list for multi-allelic rsIDs — take first entry
+        if isinstance(mv_result, list) and mv_result:
+            mv_result = mv_result[0]
+
         # Extract gene from MyVariant if not provided
         if not gene_symbol and isinstance(mv_result, dict):
             gene_symbol = (mv_result.get("predictions", {}) or {}).get("gene")
