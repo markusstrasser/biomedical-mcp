@@ -98,6 +98,57 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
     main.mount(literature.create_server(cache), namespace="literature")
     main.mount(composite.create_server(cache), namespace="composite")
 
+    # Prompt templates — structured review workflows
+    @main.prompt()
+    def variant_review(variant_id: str, gene: str = "") -> str:
+        """Structured variant review checklist using bio MCP tools."""
+        gene_part = f" in {gene}" if gene else ""
+        return f"""Review variant {variant_id}{gene_part}. Use bio MCP tools for each step:
+
+1. **Population frequency** → population_variant_frequency("{variant_id}")
+2. **ClinVar classification** → variants_lookup("{variant_id}")
+3. **In silico predictions** → (included in variants_lookup: CADD, SIFT, PolyPhen2)
+4. **Gene constraint** → population_gene_constraint("{gene}") [pLI, LOEUF]
+5. **Tissue expression** → expression_gene_expression(gene_symbol="{gene}")
+6. **Gene panels** → panels_gene_panels("{gene}") [clinical relevance]
+7. **Literature** → literature_variant_publications("{variant_id}")
+8. **Protein domain** → proteins_domains(uniprot_id=...) [is variant in critical domain?]
+
+Or use composite_variant_context("{variant_id}", gene_symbol="{gene}") for steps 1-7 in one call.
+
+Assess evidence tier per constitutional hierarchy (C3+ for clinical action)."""
+
+    @main.prompt()
+    def gene_dossier_prompt(gene: str) -> str:
+        """Comprehensive gene investigation workflow."""
+        return f"""Build a complete dossier for {gene}. Use bio MCP tools:
+
+1. **Official names** → genetics_gene_names("{gene}") [aliases, previous symbols]
+2. **Gene function** → genetics_gene_info("{gene}") [GO terms, pathways]
+3. **Constraint** → population_gene_constraint("{gene}") [LoF intolerance]
+4. **Disease associations** → targets_disease_associations(gene_symbol="{gene}")
+5. **Clinical panels** → panels_gene_panels("{gene}") [curated relevance]
+6. **Expression profile** → expression_gene_expression(gene_symbol="{gene}")
+7. **Phenotypes** → phenotype_gene_phenotypes("{gene}") [HPO terms]
+8. **GWAS associations** → gwas_gene_associations("{gene}")
+9. **Drug targets** → targets_target_info(gene_symbol="{gene}")
+10. **Protein structure** → proteins_structure(uniprot_id=...)
+
+Or use composite_gene_dossier("{gene}") for steps 1-7 in one call."""
+
+    @main.prompt()
+    def pgx_review(gene: str) -> str:
+        """Pharmacogenomics gene review workflow."""
+        return f"""Review pharmacogenomics for {gene}:
+
+1. **Star alleles** → drugs_star_alleles("{gene}") [PharmVar definitions]
+2. **PGx interactions** → targets_pharmacogenetics(gene_symbol="{gene}") [OT PGx data]
+3. **Drug mechanisms** → drugs_mechanism(compound_name=...) [for each interacting drug]
+4. **FDA labels** → drugs_label(drug_name=..., sections=["boxed_warning","clinical_pharmacology"])
+5. **Adverse events** → drugs_adverse_events(drug_name=...)
+
+Cross-reference with ClinPGx guidelines if available."""
+
     return main
 
 
