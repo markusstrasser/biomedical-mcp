@@ -1,7 +1,7 @@
 [project]
 name = "biomedical-mcp"
-version = "0.1.0"
-description = "Biomedical data MCP server — Open Targets, ChEMBL, ClinicalTrials.gov, ICD-10, NPI"
+version = "0.2.0"
+description = "Biomedical data MCP server — 14 APIs, 44 tools for genes, drugs, variants, proteins, pathways, interactions, structures"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=3.0",

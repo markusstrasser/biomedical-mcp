@@ -1,4 +1,4 @@
-"""Biomedical MCP server — 9 APIs, 29 tools for genes, drugs, variants, proteins, trials."""
+"""Biomedical MCP server — 14 APIs, 44 tools for genes, drugs, variants, proteins, pathways, interactions, structures, trials."""
 
 import logging
 import os
@@ -17,6 +17,11 @@ from biomedical_mcp.myvariant import MyVariant
 from biomedical_mcp.openfda import OpenFDA
 from biomedical_mcp.uniprot import UniProt
 from biomedical_mcp.mygene import MyGene
+from biomedical_mcp.stringdb import StringDB
+from biomedical_mcp.ensembl import Ensembl
+from biomedical_mcp.kegg import KEGG
+from biomedical_mcp.alphafold import AlphaFold
+from biomedical_mcp.reactome import Reactome
 
 log = logging.getLogger(__name__)
 
@@ -39,22 +44,30 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
         openfda = OpenFDA(cache)
         uniprot = UniProt(cache)
         mygene = MyGene(cache)
+        stringdb = StringDB(cache)
+        ensembl = Ensembl(cache)
+        kegg = KEGG(cache)
+        alphafold = AlphaFold(cache)
+        reactome = Reactome(cache)
         log.info("biomedical-mcp started (cache: %s)", data_dir / "cache.db")
         yield {
             "cache": cache, "ot": ot, "chembl": chembl, "ct": ct,
             "icd10": icd10, "npi": npi, "myvariant": myvariant,
             "openfda": openfda, "uniprot": uniprot, "mygene": mygene,
+            "stringdb": stringdb, "ensembl": ensembl, "kegg": kegg,
+            "alphafold": alphafold, "reactome": reactome,
         }
 
     mcp = FastMCP(
         "biomedical",
         instructions=(
-            "Biomedical data lookup via 9 APIs: Open Targets, ChEMBL, ClinicalTrials.gov, ICD-10, NPI, "
-            "MyVariant.info, OpenFDA, UniProt, MyGene.info.\n\n"
-            "Gene/target tools: ot_target_info, ot_disease_associations, ot_pharmacogenetics, chembl_target, chembl_bioactivity, gene_info, gene_search\n"
+            "Biomedical data lookup via 14 APIs: Open Targets, ChEMBL, ClinicalTrials.gov, ICD-10, NPI, "
+            "MyVariant.info, OpenFDA, UniProt, MyGene.info, STRING, Ensembl, KEGG, AlphaFold, Reactome.\n\n"
+            "Gene/target tools: ot_target_info, ot_disease_associations, ot_pharmacogenetics, chembl_target, chembl_bioactivity, gene_info, gene_search, ensembl_gene, ensembl_xrefs\n"
             "Drug tools: ot_drug_info, chembl_compound, chembl_mechanism, chembl_drug_indications, openfda_adverse_events, openfda_drug_label, openfda_recalls\n"
             "Variant tools: variant_lookup, variant_clinvar, variant_batch\n"
-            "Protein tools: uniprot_protein, uniprot_variants, uniprot_search\n"
+            "Protein tools: uniprot_protein, uniprot_variants, uniprot_search, alphafold_prediction, string_interactions, string_enrichment\n"
+            "Pathway tools: kegg_gene_pathways, kegg_pathway_info, kegg_find, reactome_gene_pathways, reactome_pathway_detail, reactome_enrichment\n"
             "Disease tools: ot_disease_targets, ct_search, ct_trial_detail, ct_stats\n"
             "Code/provider tools: icd10_search, icd10_lookup, npi_search, npi_lookup\n"
             "General search: ot_search"
@@ -477,6 +490,149 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
         mg: MyGene = ctx.lifespan_context["mygene"]
         results = mg.search(query, species=species, limit=limit)
         return {"query": query, "count": len(results), "results": results}
+
+    # ── STRING DB ────────────────────────────────────────────────
+
+    @mcp.tool()
+    def string_interactions(ctx: Context, protein: str, species: str = "9606", min_score: int = 700, limit: int = 25) -> dict:
+        """Get protein-protein interactions from STRING DB.
+
+        Args:
+            protein: Protein/gene name (e.g. "TP53", "EGFR").
+            species: NCBI taxonomy ID (default "9606" = human).
+            min_score: Minimum combined score 0-1000 (default 700 = high confidence).
+            limit: Max interaction partners (default 25).
+        """
+        sdb: StringDB = ctx.lifespan_context["stringdb"]
+        return sdb.interactions(protein, species=species, min_score=min_score, limit=limit)
+
+    @mcp.tool()
+    def string_enrichment(ctx: Context, proteins: list[str], species: str = "9606") -> dict:
+        """Get functional enrichment (GO, KEGG, Reactome terms) for a set of proteins.
+
+        Args:
+            proteins: List of protein/gene names (e.g. ["TP53", "BRCA1", "ATM"]).
+            species: NCBI taxonomy ID (default "9606" = human).
+        """
+        sdb: StringDB = ctx.lifespan_context["stringdb"]
+        return sdb.functional_enrichment(proteins, species=species)
+
+    # ── Ensembl ────────────────────────────────────────────────
+
+    @mcp.tool()
+    def ensembl_gene(ctx: Context, symbol: str | None = None, ensembl_id: str | None = None, species: str = "homo_sapiens") -> dict:
+        """Get gene annotation from Ensembl: ID, biotype, chromosomal location, description.
+
+        Args:
+            symbol: Gene symbol (e.g. "BRCA1"). Looked up via Ensembl REST.
+            ensembl_id: Ensembl gene ID (e.g. "ENSG00000012048"). Takes priority.
+            species: Species (default "homo_sapiens").
+        """
+        ens: Ensembl = ctx.lifespan_context["ensembl"]
+        if ensembl_id:
+            return ens.gene_by_id(ensembl_id)
+        if symbol:
+            return ens.gene_by_symbol(symbol, species=species)
+        return {"error": "Provide either symbol or ensembl_id"}
+
+    @mcp.tool()
+    def ensembl_xrefs(ctx: Context, ensembl_id: str) -> dict:
+        """Get cross-references from Ensembl ID to UniProt, HGNC, RefSeq, CCDS, etc.
+
+        Args:
+            ensembl_id: Ensembl gene/transcript ID (e.g. "ENSG00000012048").
+        """
+        ens: Ensembl = ctx.lifespan_context["ensembl"]
+        return ens.xrefs(ensembl_id)
+
+    @mcp.tool()
+    def ensembl_sequence(ctx: Context, ensembl_id: str, seq_type: str = "genomic") -> dict:
+        """Get nucleotide or protein sequence for an Ensembl ID.
+
+        Args:
+            ensembl_id: Ensembl gene/transcript ID.
+            seq_type: Sequence type: "genomic", "cds", "cdna", or "protein".
+        """
+        ens: Ensembl = ctx.lifespan_context["ensembl"]
+        return ens.sequence(ensembl_id, seq_type=seq_type)
+
+    # ── KEGG ──────────────────────────────────────────────────
+
+    @mcp.tool()
+    def kegg_gene_pathways(ctx: Context, gene_symbol: str, organism: str = "hsa") -> dict:
+        """Get KEGG pathways for a gene.
+
+        Args:
+            gene_symbol: Gene symbol (e.g. "TP53", "EGFR").
+            organism: KEGG organism code (default "hsa" = human).
+        """
+        kegg_client: KEGG = ctx.lifespan_context["kegg"]
+        return kegg_client.gene_pathways(gene_symbol, organism=organism)
+
+    @mcp.tool()
+    def kegg_pathway_info(ctx: Context, pathway_id: str) -> dict:
+        """Get detailed info for a KEGG pathway: genes, compounds, diseases.
+
+        Args:
+            pathway_id: KEGG pathway ID (e.g. "hsa04110" for cell cycle, "hsa05200" for cancer).
+        """
+        kegg_client: KEGG = ctx.lifespan_context["kegg"]
+        return kegg_client.pathway_info(pathway_id)
+
+    @mcp.tool()
+    def kegg_find(ctx: Context, query: str, database: str = "pathway") -> dict:
+        """Search KEGG databases by keyword.
+
+        Args:
+            query: Search term (e.g. "apoptosis", "insulin").
+            database: KEGG database to search: "pathway", "genes", "compound", "disease", "drug".
+        """
+        kegg_client: KEGG = ctx.lifespan_context["kegg"]
+        return kegg_client.find(query, database=database)
+
+    # ── AlphaFold ─────────────────────────────────────────────
+
+    @mcp.tool()
+    def alphafold_prediction(ctx: Context, uniprot_id: str) -> dict:
+        """Get AlphaFold predicted structure info: model URL, confidence (pLDDT), PAE image.
+
+        Args:
+            uniprot_id: UniProt accession (e.g. "P38398" for BRCA1, "P04637" for TP53).
+        """
+        af: AlphaFold = ctx.lifespan_context["alphafold"]
+        return af.prediction(uniprot_id)
+
+    # ── Reactome ──────────────────────────────────────────────
+
+    @mcp.tool()
+    def reactome_gene_pathways(ctx: Context, gene_symbol: str) -> dict:
+        """Get Reactome biological pathways for a gene.
+
+        Args:
+            gene_symbol: Gene symbol (e.g. "TP53", "BRCA1").
+        """
+        rc: Reactome = ctx.lifespan_context["reactome"]
+        return rc.pathways_for_gene(gene_symbol)
+
+    @mcp.tool()
+    def reactome_pathway_detail(ctx: Context, pathway_id: str) -> dict:
+        """Get Reactome pathway details: summary, compartments, diagram link.
+
+        Args:
+            pathway_id: Reactome stable ID (e.g. "R-HSA-109582" for hemostasis).
+        """
+        rc: Reactome = ctx.lifespan_context["reactome"]
+        return rc.pathway_detail(pathway_id)
+
+    @mcp.tool()
+    def reactome_enrichment(ctx: Context, gene_list: list[str]) -> dict:
+        """Run Reactome pathway enrichment analysis on a gene list.
+
+        Args:
+            gene_list: List of gene symbols (e.g. ["TP53", "BRCA1", "ATM", "CHEK2"]).
+        """
+        rc: Reactome = ctx.lifespan_context["reactome"]
+        return rc.enrichment(gene_list)
 
     return mcp
 
