@@ -18,7 +18,10 @@ def create_server(cache: Cache) -> FastMCP:
         Args:
             variant_id: rsID (e.g. "rs1805007"), HGVS (e.g. "chr16:g.89919683C>T"), or dbSNP-style ID.
         """
-        return myvariant.lookup(variant_id)
+        result = myvariant.lookup(variant_id)
+        if isinstance(result, list):
+            return {"variant_id": variant_id, "multi_allele": True, "count": len(result), "alleles": result}
+        return result
 
     @server.tool()
     def clinvar(gene_symbol: str, significance: str | None = None, limit: int = 25) -> dict:
