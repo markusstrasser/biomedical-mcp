@@ -1,11 +1,15 @@
-"""ClinicalTrials.gov v2 API client."""
+"""ClinicalTrials.gov v2 API client.
+
+CT.gov blocks Python HTTP libraries via TLS fingerprinting.
+We use subprocess curl as transport — works reliably.
+"""
 
 import hashlib
+import json
 import logging
+import subprocess
 from collections import Counter
-
-import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
+from urllib.parse import urlencode
 
 from biomedical_mcp.cache import Cache
 
@@ -14,26 +18,21 @@ log = logging.getLogger(__name__)
 CT_BASE = "https://clinicaltrials.gov/api/v2"
 
 
-def _is_retryable(exc: BaseException) -> bool:
-    if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code in (429, 500, 502, 503, 504)
-    return isinstance(exc, (httpx.ConnectError, httpx.ReadTimeout))
-
-
 class ClinicalTrials:
     def __init__(self, cache: Cache):
         self.cache = cache
-        self.client = httpx.Client(
-            base_url=CT_BASE,
-            timeout=30,
-            headers={"User-Agent": "biomedical-mcp/0.1"},
-        )
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=15), retry=retry_if_exception(_is_retryable))
     def _get(self, path: str, params: dict | None = None) -> dict:
-        resp = self.client.get(path, params=params)
-        resp.raise_for_status()
-        return resp.json()
+        url = f"{CT_BASE}{path}"
+        if params:
+            url = f"{url}?{urlencode(params)}"
+        result = subprocess.run(
+            ["curl", "-s", "--max-time", "30", url],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"curl failed (exit {result.returncode}): {result.stderr[:200]}")
+        return json.loads(result.stdout)
 
     def _cached(self, prefix: str, path: str, params: dict, max_age_days: int = 7) -> dict:
         raw = f"{path}:{sorted(params.items())}"
@@ -102,7 +101,6 @@ class ClinicalTrials:
         data = self._cached("detail", f"/studies/{nct_id}", {})
         ps = data.get("protocolSection", {})
         base = self._extract_study(data)
-        # Add detailed fields
         eligibility = ps.get("eligibilityModule", {})
         outcomes = ps.get("outcomesModule", {})
         design = ps.get("designModule", {})

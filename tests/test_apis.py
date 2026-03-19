@@ -67,7 +67,7 @@ class TestChEMBL:
         ch = ChEMBL(cache)
         result = ch.compound("CHEMBL521")  # ibuprofen
         assert result["name"] == "IBUPROFEN"
-        assert result["max_phase"] == 4
+        assert float(result["max_phase"]) == 4.0
 
     def test_mechanism(self, cache):
         ch = ChEMBL(cache)
