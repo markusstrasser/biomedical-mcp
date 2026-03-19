@@ -1,10 +1,12 @@
-"""Proteins domain — structure, function, interactions, variants."""
+"""Proteins domain — structure, function, interactions, variants, domains."""
 
 from fastmcp import FastMCP
 
 from biomedical_mcp.uniprot import UniProt
 from biomedical_mcp.alphafold import AlphaFold
 from biomedical_mcp.stringdb import StringDB
+from biomedical_mcp.interpro import InterPro
+from biomedical_mcp.pdb import PDB
 from biomedical_mcp.cache import Cache
 
 
@@ -12,6 +14,8 @@ def create_server(cache: Cache) -> FastMCP:
     uniprot = UniProt(cache)
     alphafold = AlphaFold(cache)
     stringdb = StringDB(cache)
+    interpro = InterPro(cache)
+    pdb = PDB(cache)
 
     server = FastMCP("proteins")
 
@@ -84,5 +88,32 @@ def create_server(cache: Cache) -> FastMCP:
             species: NCBI taxonomy ID (default "9606" = human).
         """
         return stringdb.functional_enrichment(proteins, species=species)
+
+    @server.tool(tags={"structural", "gene-lookup"})
+    def domains(uniprot_id: str) -> dict:
+        """Get protein domain/family/site annotations from InterPro.
+
+        Args:
+            uniprot_id: UniProt accession (e.g. "P38398" for BRCA1). Use proteins_protein to find accessions.
+        """
+        return interpro.protein_domains(uniprot_id=uniprot_id)
+
+    @server.tool(tags={"structural"})
+    def experimental_structures(uniprot_id: str) -> dict:
+        """Get experimental PDB structures for a protein: resolution, method, title.
+
+        Args:
+            uniprot_id: UniProt accession (e.g. "P04637" for TP53).
+        """
+        return pdb.structures_for_gene(uniprot_id)
+
+    @server.tool(tags={"structural"})
+    def pdb_detail(pdb_id: str) -> dict:
+        """Get full detail for a PDB structure entry.
+
+        Args:
+            pdb_id: PDB identifier (e.g. "1TUP", "6VXX").
+        """
+        return pdb.structure_detail(pdb_id)
 
     return server

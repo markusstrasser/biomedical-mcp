@@ -1,8 +1,5 @@
 """Live API smoke tests for new domains — one request per API to verify connectivity."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
 
 from biomedical_mcp.cache import Cache
@@ -14,6 +11,8 @@ from biomedical_mcp.gtex import GTEx
 from biomedical_mcp.hgnc import HGNC
 from biomedical_mcp.gwas_catalog import GWASCatalog
 from biomedical_mcp.litvar import LitVar
+from biomedical_mcp.interpro import InterPro
+from biomedical_mcp.pdb import PDB
 
 
 @pytest.fixture
@@ -161,3 +160,39 @@ class TestLitVar:
     def test_validate(self, cache):
         lv = LitVar(cache)
         assert lv.validate() is True
+
+
+# ── InterPro ──────────────────────────────────────────────────
+
+
+class TestInterPro:
+    def test_validate(self, cache):
+        ip = InterPro(cache)
+        assert ip.validate() is True
+
+
+# ── PDB ───────────────────────────────────────────────────────
+
+
+class TestPDB:
+    def test_structure_detail(self, cache):
+        p = PDB(cache)
+        result = p.structure_detail("1TUP")  # TP53 DNA-binding domain
+        assert result["pdb_id"] == "1TUP"
+        assert result.get("title") is not None
+
+    def test_validate(self, cache):
+        p = PDB(cache)
+        assert p.validate() is True
+
+
+# ── Composite ─────────────────────────────────────────────────
+
+
+class TestComposite:
+    def test_gene_dossier(self, cache):
+        """Test gene_dossier compound tool."""
+        from biomedical_mcp.domains.composite import create_server as create_composite
+        # Just verify the module imports and server creates without error
+        server = create_composite(cache)
+        assert server is not None

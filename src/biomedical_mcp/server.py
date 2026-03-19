@@ -17,7 +17,7 @@ from biomedical_mcp.cache import Cache
 from biomedical_mcp.middleware import TelemetryMiddleware
 from biomedical_mcp.domains import (
     genetics, targets, drugs, proteins, pathways, variants, clinical,
-    population, panels, phenotype, expression, gwas, literature,
+    population, panels, phenotype, expression, gwas, literature, composite,
 )
 
 log = logging.getLogger(__name__)
@@ -25,13 +25,13 @@ log = logging.getLogger(__name__)
 DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "biomedical-mcp"
 
 INSTRUCTIONS = """\
-Biomedical data lookup via 25 APIs across 14 domains. Tools are namespace-prefixed.
+Biomedical data lookup via 27 APIs across 15 domains. Tools are namespace-prefixed.
 
 DOMAINS:
   genetics_*    — gene annotation, IDs, sequences, nomenclature (MyGene, Ensembl, HGNC)
   targets_*     — disease-gene associations, pharmacogenetics (Open Targets)
   drugs_*       — compounds, mechanisms, labels, safety (ChEMBL, OpenFDA)
-  proteins_*    — structure, function, interactions (UniProt, AlphaFold, STRING)
+  proteins_*    — structure, function, interactions, domains (UniProt, AlphaFold, STRING, InterPro, PDB)
   pathways_*    — metabolic & signaling pathways (KEGG, Reactome)
   variants_*    — genetic variant annotations, ClinVar (MyVariant.info)
   clinical_*    — trials, ICD-10 codes, providers (ClinicalTrials.gov, NPI)
@@ -41,6 +41,7 @@ DOMAINS:
   gwas_*        — GWAS variant-trait associations (GWAS Catalog)
   phenotype_*   — phenotype terms, gene-phenotype (HPO, Monarch)
   literature_*  — variant-level literature mining (LitVar2)
+  composite_*   — multi-API compound queries (variant_context, gene_dossier)
 
 QUICK REFERENCE:
   Gene lookup:        genetics_gene_info, genetics_ensembl_gene, genetics_gene_names
@@ -59,6 +60,10 @@ QUICK REFERENCE:
   GWAS hits:          gwas_variant_associations
   Phenotypes:         phenotype_gene_phenotypes, phenotype_hpo_search
   Literature:         literature_variant_publications
+  Protein domains:    proteins_domains (InterPro)
+  PDB structures:     proteins_experimental_structures, proteins_pdb_detail
+  EVERYTHING about a variant: composite_variant_context
+  EVERYTHING about a gene:    composite_gene_dossier
 """
 
 
@@ -91,6 +96,7 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
     main.mount(expression.create_server(cache), namespace="expression")
     main.mount(gwas.create_server(cache), namespace="gwas")
     main.mount(literature.create_server(cache), namespace="literature")
+    main.mount(composite.create_server(cache), namespace="composite")
 
     return main
 
