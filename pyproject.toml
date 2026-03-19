@@ -1,6 +1,6 @@
 [project]
 name = "biomedical-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Biomedical data MCP server — 14 APIs, 44 tools for genes, drugs, variants, proteins, pathways, interactions, structures"
 requires-python = ">=3.11"
 dependencies = [
