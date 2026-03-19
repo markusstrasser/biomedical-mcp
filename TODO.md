@@ -4,7 +4,7 @@ Things that need your action (not automatable by agents).
 
 ## Required
 
-- [ ] **Register PharmVar API key** — Go to [pharmvar.org](https://www.pharmvar.org), create account, generate API key in Account Settings. Then set `PHARMVAR_API_KEY` env var in your shell profile or `.mcp.json` env block. Without this, `drugs_star_alleles` returns auth errors.
+- [x] **Register PharmVar API key** — Set in genomics `.mcp.json` env block (2026-03-19).
 
 ## Recommended
 
