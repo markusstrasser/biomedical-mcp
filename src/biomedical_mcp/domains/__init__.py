@@ -1,1 +1,1 @@
-"""Domain sub-servers for biomedical-mcp, mounted with namespaces."""
+"""Domain sub-servers for bio-mcp, mounted with namespaces."""

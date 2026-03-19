@@ -1,15 +1,17 @@
-"""Genetics domain — gene annotation, IDs, cross-references, sequences."""
+"""Genetics domain — gene annotation, IDs, cross-references, sequences, nomenclature."""
 
 from fastmcp import FastMCP
 
 from biomedical_mcp.ensembl import Ensembl
 from biomedical_mcp.mygene import MyGene
+from biomedical_mcp.hgnc import HGNC
 from biomedical_mcp.cache import Cache
 
 
 def create_server(cache: Cache) -> FastMCP:
     mygene = MyGene(cache)
     ensembl = Ensembl(cache)
+    hgnc = HGNC(cache)
 
     server = FastMCP("genetics")
 
@@ -70,5 +72,14 @@ def create_server(cache: Cache) -> FastMCP:
             seq_type: Sequence type: "genomic", "cds", "cdna", or "protein".
         """
         return ensembl.sequence(ensembl_id, seq_type=seq_type)
+
+    @server.tool(tags={"gene-lookup"})
+    def gene_names(symbol: str) -> dict:
+        """Official HGNC nomenclature: symbol, full name, aliases, previous symbols, gene family, IDs.
+
+        Args:
+            symbol: Gene symbol (e.g. "BRCA1", "CYP2D6", "TP53").
+        """
+        return hgnc.gene_names(symbol)
 
     return server
