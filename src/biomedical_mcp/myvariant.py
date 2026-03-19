@@ -55,13 +55,37 @@ class MyVariant:
         self.cache.set(key, result)
         return result
 
+    @staticmethod
+    def _normalize_variant_id(variant_id: str) -> str:
+        """Normalize variant ID to MyVariant.info HGVS format.
+
+        Accepts: rsID, HGVS (chr:g.posRef>Alt), or VCF-style (chr:pos:ref>alt).
+        """
+        if variant_id.startswith("rs"):
+            return variant_id
+        if ":g." in variant_id:
+            return variant_id
+        # VCF-style: chr10:129867906:G>A → chr10:g.129867906G>A
+        parts = variant_id.split(":")
+        if len(parts) == 3:
+            chrom, pos, change = parts
+            return f"{chrom}:g.{pos}{change}"
+        return variant_id
+
     def lookup(self, variant_id: str, fields: str | None = None) -> dict | list[dict]:
         """Look up a single variant by rsID, HGVS, or chrX:g.posA>B.
 
+        Also accepts VCF-style chr:pos:ref>alt (auto-converted to HGVS).
         rsIDs with multiple alt alleles return a list of annotations.
         """
+        normalized = self._normalize_variant_id(variant_id)
         f = fields or DEFAULT_FIELDS
-        data = self._cached("var", f"/variant/{variant_id}", {"fields": f})
+        try:
+            data = self._cached("var", f"/variant/{normalized}", {"fields": f})
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                return {"variant_id": normalized, "error": "not_found", "query": variant_id}
+            raise
         if isinstance(data, list):
             return [self._extract_annotations(d) for d in data]
         return self._extract_annotations(data)
@@ -82,18 +106,23 @@ class MyVariant:
 
     def batch(self, variant_ids: list[str], fields: str | None = None) -> list[dict]:
         """Batch lookup up to 100 variants via POST."""
-        ids = variant_ids[:100]
+        normalized = [self._normalize_variant_id(vid) for vid in variant_ids[:100]]
         f = fields or DEFAULT_FIELDS
         # Batch results aren't cached individually — cache the whole batch
-        raw = f"batch:{','.join(sorted(ids))}:{f}"
+        raw = f"batch:{','.join(sorted(normalized))}:{f}"
         key = f"myvariant:batch:{hashlib.md5(raw.encode()).hexdigest()}"
         cached = self.cache.get(key, max_age_days=30)
         if cached is not None:
             return cached
-        result = self._post("/variant", data={"ids": ",".join(ids), "fields": f})
+        result = self._post("/variant", data={"ids": ",".join(normalized), "fields": f})
         if isinstance(result, dict):
             result = [result]
-        extracted = [self._extract_annotations(r) for r in result]
+        extracted = []
+        for record in result:
+            if record.get("notfound"):
+                extracted.append({"variant_id": record.get("_id", record.get("query")), "error": "not_found"})
+            else:
+                extracted.append(self._extract_annotations(record))
         self.cache.set(key, extracted)
         return extracted
 
