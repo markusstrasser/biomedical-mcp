@@ -87,18 +87,14 @@ query($id: String!) {
     approvedSymbol
     pharmacogenomics {
       variantRsId
-      variantId
       genotype
-      genotypeId
       genotypeAnnotationText
-      drugs { id name }
+      drugs { drugFromSource drugId }
       phenotypeText
       pgxCategory
       evidenceLevel
-      haplotypeFromSourceId
       isDirectTarget
       datasourceId
-      studyId
     }
   }
 }
