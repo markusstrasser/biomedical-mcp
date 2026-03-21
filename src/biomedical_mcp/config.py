@@ -36,6 +36,9 @@ DOMAINS: dict[str, dict] = {
     "litvar":          {"base_url": "https://www.ncbi.nlm.nih.gov/research/litvar2-api", "ttl_days": TTL_VOLATILE, "rate_limit": 3.0},
     "interpro":        {"base_url": "https://www.ebi.ac.uk/interpro/api",               "ttl_days": TTL_STABLE,   "rate_limit": 3.0},
     "pdb":             {"base_url": "https://data.rcsb.org",                            "ttl_days": TTL_STABLE,   "rate_limit": 5.0},
+    # New: ISBT, Orphanet, ClinGen
+    "isbt":            {"base_url": "https://api-blooddatabase.isbtweb.org",            "ttl_days": TTL_STABLE,   "rate_limit": 3.0},
+    "orphanet":        {"base_url": "https://api.orphadata.com",                        "ttl_days": TTL_CURATED,  "rate_limit": 3.0},
 }
 
 

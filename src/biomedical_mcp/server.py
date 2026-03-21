@@ -18,6 +18,7 @@ from biomedical_mcp.middleware import TelemetryMiddleware
 from biomedical_mcp.domains import (
     genetics, targets, drugs, proteins, pathways, variants, clinical,
     population, panels, phenotype, expression, gwas, literature, composite,
+    bloodgroups, rare_disease, curation,
 )
 
 log = logging.getLogger(__name__)
@@ -25,27 +26,30 @@ log = logging.getLogger(__name__)
 DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "biomedical-mcp"
 
 INSTRUCTIONS = """\
-Biomedical data lookup via 27 APIs across 15 domains. Tools are namespace-prefixed.
+Biomedical data lookup via 30 APIs across 18 domains. Tools are namespace-prefixed.
 
 DOMAINS:
-  genetics_*    — gene annotation, IDs, sequences, nomenclature (MyGene, Ensembl, HGNC)
-  targets_*     — disease-gene associations, pharmacogenetics (Open Targets)
-  drugs_*       — compounds, mechanisms, labels, safety (ChEMBL, OpenFDA)
-  proteins_*    — structure, function, interactions, domains (UniProt, AlphaFold, STRING, InterPro, PDB)
-  pathways_*    — metabolic & signaling pathways (KEGG, Reactome)
-  variants_*    — genetic variant annotations, ClinVar (MyVariant.info)
-  clinical_*    — trials, ICD-10 codes, providers (ClinicalTrials.gov, NPI)
-  population_*  — allele frequencies, constraint (gnomAD)
-  expression_*  — tissue expression, eQTLs (GTEx)
-  panels_*      — curated gene panels by condition (PanelApp)
-  gwas_*        — GWAS variant-trait associations (GWAS Catalog)
-  phenotype_*   — phenotype terms, gene-phenotype (HPO, Monarch)
-  literature_*  — variant-level literature mining (LitVar2)
-  composite_*   — multi-API compound queries (variant_context, gene_dossier)
+  genetics_*      — gene annotation, IDs, sequences, nomenclature (MyGene, Ensembl, HGNC)
+  targets_*       — disease-gene associations, pharmacogenetics (Open Targets)
+  drugs_*         — compounds, mechanisms, labels, safety (ChEMBL, OpenFDA)
+  proteins_*      — structure, function, interactions, domains (UniProt, AlphaFold, STRING, InterPro, PDB)
+  pathways_*      — metabolic & signaling pathways (KEGG, Reactome)
+  variants_*      — genetic variant annotations, ClinVar (MyVariant.info)
+  clinical_*      — trials, ICD-10 codes, providers (ClinicalTrials.gov, NPI)
+  population_*    — allele frequencies, constraint (gnomAD)
+  expression_*    — tissue expression, eQTLs (GTEx)
+  panels_*        — curated gene panels by condition (PanelApp)
+  gwas_*          — GWAS variant-trait associations (GWAS Catalog)
+  phenotype_*     — phenotype terms, gene-phenotype (HPO, Monarch)
+  literature_*    — variant-level literature mining (LitVar2)
+  composite_*     — multi-API compound queries (variant_context, gene_dossier)
+  bloodgroups_*   — blood group systems, alleles, antigens (ISBT)
+  rare_disease_*  — rare disease data, inheritance, epidemiology (Orphanet)
+  curation_*      — gene-disease validity, dosage sensitivity (ClinGen)
 
 QUICK REFERENCE:
   Gene lookup:        genetics_gene_info, genetics_ensembl_gene, genetics_gene_names
-  Gene→disease:       targets_disease_associations
+  Gene→disease:       targets_disease_associations, curation_gene_validity
   Gene→pathways:      pathways_kegg_gene, pathways_reactome_gene
   Gene→interactions:  proteins_interactions
   Variant annotation: variants_lookup, variants_clinvar
@@ -62,6 +66,9 @@ QUICK REFERENCE:
   Literature:         literature_variant_publications
   Protein domains:    proteins_domains (InterPro)
   PDB structures:     proteins_experimental_structures, proteins_pdb_detail
+  Blood groups:       bloodgroups_systems, bloodgroups_alleles, bloodgroups_search_alleles
+  Rare diseases:      rare_disease_gene_rare_diseases, rare_disease_disease_natural_history
+  Gene-disease proof: curation_gene_validity, curation_gene_dosage
   EVERYTHING about a variant: composite_variant_context
   EVERYTHING about a gene:    composite_gene_dossier
 """
@@ -97,6 +104,11 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
     main.mount(gwas.create_server(cache), namespace="gwas")
     main.mount(literature.create_server(cache), namespace="literature")
     main.mount(composite.create_server(cache), namespace="composite")
+
+    # New domains (3)
+    main.mount(bloodgroups.create_server(cache), namespace="bloodgroups")
+    main.mount(rare_disease.create_server(cache), namespace="rare_disease")
+    main.mount(curation.create_server(cache), namespace="curation")
 
     # Prompt templates — structured review workflows
     @main.prompt()
