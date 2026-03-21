@@ -69,8 +69,12 @@ def create_server(cache: Cache) -> FastMCP:
                        ref: str = "", alt: str = "") -> dict:
         """Look up blood group variants by rsID or GRCh38 genomic coordinates.
 
+        NOTE: ISBT catalogs ~1,862 functional exonic/splice-site variants that define
+        blood group alleles. Intronic, regulatory, or GWAS tag SNPs will return 0 results.
+        For those, use variants_lookup (MyVariant) or population_variant_frequency (gnomAD).
+
         Args:
-            rsid: dbSNP rsID (e.g. "rs505922").
+            rsid: dbSNP rsID (e.g. "rs8176719" for ABO O allele 261delG).
             chromosome: GRCh38 chromosome (e.g. "9"). Use with position.
             position: GRCh38 position. Use with chromosome.
             ref: Reference allele.

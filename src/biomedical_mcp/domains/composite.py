@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastmcp import FastMCP
 
 from biomedical_mcp.cache import Cache
+from biomedical_mcp.clingen import ClinGen
 from biomedical_mcp.gnomad import GnomAD
 from biomedical_mcp.panelapp import PanelApp
 from biomedical_mcp.hpo import HPO
@@ -17,6 +18,7 @@ from biomedical_mcp.gtex import GTEx
 from biomedical_mcp.hgnc import HGNC
 from biomedical_mcp.myvariant import MyVariant
 from biomedical_mcp.litvar import LitVar
+from biomedical_mcp.orphanet import Orphanet
 from biomedical_mcp.provenance import make_provenance
 
 log = logging.getLogger(__name__)
@@ -37,6 +39,7 @@ def _gather_sync(*callables):
 
 
 def create_server(cache: Cache) -> FastMCP:
+    clingen = ClinGen(cache)
     gnomad = GnomAD(cache)
     panelapp = PanelApp(cache)
     hpo = HPO(cache)
@@ -44,6 +47,7 @@ def create_server(cache: Cache) -> FastMCP:
     hgnc = HGNC(cache)
     myvariant = MyVariant(cache)
     litvar = LitVar(cache)
+    orphanet = Orphanet(cache)
 
     server = FastMCP("composite")
 
@@ -111,9 +115,10 @@ def create_server(cache: Cache) -> FastMCP:
 
     @server.tool(tags={"gene-lookup"})
     def gene_dossier(gene_symbol: str) -> dict:
-        """Comprehensive gene report: names, constraint, pathways, diseases, expression, panels.
+        """Comprehensive gene report: names, constraint, pathways, diseases, expression,
+        panels, gene-disease validity, dosage sensitivity, rare disease associations.
 
-        Calls HGNC + gnomAD + PanelApp + GTEx + HPO concurrently.
+        Calls HGNC + gnomAD + PanelApp + GTEx + HPO + ClinGen + Orphanet concurrently.
 
         Args:
             gene_symbol: Gene symbol (e.g. "BRCA1", "CYP2D6", "SCN1A").
@@ -124,8 +129,12 @@ def create_server(cache: Cache) -> FastMCP:
             lambda: panelapp.gene_panels(gene_symbol, confidence="all"),
             lambda: gtex.top_tissues(gene_symbol, limit=10),
             lambda: hpo.gene_phenotypes(gene_symbol),
+            lambda: clingen.gene_validity(gene_symbol),
+            lambda: clingen.gene_dosage(gene_symbol),
+            lambda: orphanet.gene_diseases(gene_symbol),
         )
-        names_result, constraint_result, panels_result, expr_result, pheno_result = results
+        (names_result, constraint_result, panels_result, expr_result,
+         pheno_result, validity_result, dosage_result, orphanet_result) = results
 
         def safe(result):
             return result if not isinstance(result, Exception) else {"error": str(result)}
@@ -137,12 +146,17 @@ def create_server(cache: Cache) -> FastMCP:
             "panels": safe(panels_result),
             "expression": safe(expr_result),
             "phenotypes": safe(pheno_result),
+            "gene_disease_validity": safe(validity_result),
+            "dosage_sensitivity": safe(dosage_result),
+            "rare_diseases": safe(orphanet_result),
             "provenance": {
                 "hgnc": make_provenance("hgnc"),
                 "gnomad": make_provenance("gnomad", data_version="gnomad_r4"),
                 "panelapp": make_provenance("panelapp"),
                 "gtex": make_provenance("gtex"),
                 "hpo": make_provenance("hpo"),
+                "clingen": make_provenance("clingen_gene_validity", evidence_grade="A1"),
+                "orphanet": make_provenance("orphanet", evidence_grade="B2"),
             },
         }
 

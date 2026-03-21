@@ -186,6 +186,105 @@ class TestPDB:
         assert p.validate() is True
 
 
+# ── ISBT Blood Groups ────────────────────────────────────────
+
+
+class TestISBT:
+    def test_systems(self, cache):
+        from biomedical_mcp.isbt import ISBT
+        isbt = ISBT(cache)
+        result = isbt.systems()
+        assert result["count"] >= 48  # 48 blood group systems minimum
+        assert any(s["symbol"] == "ABO" for s in result["systems"])
+
+    def test_alleles(self, cache):
+        from biomedical_mcp.isbt import ISBT
+        isbt = ISBT(cache)
+        result = isbt.alleles("ABO")
+        assert result["count"] > 100  # ABO has 200+ alleles
+        assert any(a["isbt_allele"].startswith("ABO*") for a in result["alleles"])
+
+    def test_search_alleles(self, cache):
+        from biomedical_mcp.isbt import ISBT
+        isbt = ISBT(cache)
+        result = isbt.search_alleles(system_symbol="FY")
+        assert result["count"] > 10  # FY has 30+ alleles
+
+    def test_variant_lookup_exonic(self, cache):
+        from biomedical_mcp.isbt import ISBT
+        isbt = ISBT(cache)
+        result = isbt.variant_lookup(rsid="rs8176719")  # ABO O allele 261delG
+        assert result["count"] >= 1
+
+    def test_validate(self, cache):
+        from biomedical_mcp.isbt import ISBT
+        isbt = ISBT(cache)
+        assert isbt.validate() is True
+
+
+# ── Orphanet ─────────────────────────────────────────────────
+
+
+class TestOrphanet:
+    def test_gene_diseases(self, cache):
+        from biomedical_mcp.orphanet import Orphanet
+        orp = Orphanet(cache)
+        result = orp.gene_diseases("BRCA1")
+        assert result["count"] > 0
+        assert any("susceptibility" in (d.get("association_type") or "").lower()
+                    or "disease-causing" in (d.get("association_type") or "").lower()
+                    for d in result["diseases"])
+
+    def test_natural_history(self, cache):
+        from biomedical_mcp.orphanet import Orphanet
+        orp = Orphanet(cache)
+        result = orp.natural_history(558)  # Marfan syndrome
+        assert result["name"] == "Marfan syndrome"
+        assert "Autosomal dominant" in result["inheritance"]
+
+    def test_omim_lookup(self, cache):
+        from biomedical_mcp.orphanet import Orphanet
+        orp = Orphanet(cache)
+        result = orp.search_by_omim("154700")  # Marfan
+        assert result["count"] > 0
+
+    def test_omim_404_graceful(self, cache):
+        from biomedical_mcp.orphanet import Orphanet
+        orp = Orphanet(cache)
+        result = orp.search_by_omim("999999999")  # Nonexistent
+        assert result["count"] == 0
+        assert "note" in result
+
+    def test_validate(self, cache):
+        from biomedical_mcp.orphanet import Orphanet
+        orp = Orphanet(cache)
+        assert orp.validate() is True
+
+
+# ── ClinGen ──────────────────────────────────────────────────
+
+
+class TestClinGen:
+    def test_gene_validity(self, cache):
+        from biomedical_mcp.clingen import ClinGen
+        cg = ClinGen(cache)
+        result = cg.gene_validity("BRCA1")
+        assert result["count"] >= 1
+        assert any(c["classification"] == "Definitive" for c in result["curations"])
+
+    def test_gene_dosage(self, cache):
+        from biomedical_mcp.clingen import ClinGen
+        cg = ClinGen(cache)
+        result = cg.gene_dosage("BRCA1")
+        assert result["count"] >= 1
+
+    def test_disease_search(self, cache):
+        from biomedical_mcp.clingen import ClinGen
+        cg = ClinGen(cache)
+        result = cg.disease_validity("cardiomyopathy")
+        assert result["count"] > 10  # Many cardiomyopathy gene curations
+
+
 # ── Composite ─────────────────────────────────────────────────
 
 
