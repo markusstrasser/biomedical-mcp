@@ -30,7 +30,7 @@ class MyVariant:
         self.client = httpx.Client(
             base_url=MYVARIANT_BASE,
             timeout=30,
-            headers={"User-Agent": "biomedical-mcp/0.1"},
+            headers={"User-Agent": "biomedical-mcp/0.5"},
         )
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=15), retry=retry_if_exception(_is_retryable))
@@ -54,6 +54,42 @@ class MyVariant:
         result = self._get(path, params)
         self.cache.set(key, result)
         return result
+
+    def _resolve_hg38(self, rsid: str | None, chrom: str | None) -> int | None:
+        """Resolve rsID to GRCh38 position via Ensembl REST API.
+
+        MyVariant.info only provides hg19 positions in the dbSNP field.
+        Ensembl /variation/human/{rsid} returns GRCh38 mappings.
+        Results are cached for 90 days (rsID→position mappings are stable).
+        """
+        if not rsid or not rsid.startswith("rs"):
+            return None
+        cache_key = f"myvariant:hg38_resolve:{rsid}"
+        cached = self.cache.get(cache_key, max_age_days=90)
+        if cached is not None:
+            return cached.get("position_hg38")
+        try:
+            resp = httpx.get(
+                f"https://rest.ensembl.org/variation/human/{rsid}",
+                params={"content-type": "application/json"},
+                timeout=15,
+                headers={"User-Agent": "biomedical-mcp/0.5"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            for mapping in data.get("mappings", []):
+                if mapping.get("assembly_name") == "GRCh38":
+                    seq = str(mapping.get("seq_region_name", ""))
+                    # Match chromosome if provided
+                    if chrom and seq != chrom and seq != chrom.replace("chr", ""):
+                        continue
+                    pos = mapping.get("start")
+                    if pos is not None:
+                        self.cache.set(cache_key, {"position_hg38": pos})
+                        return pos
+        except Exception:
+            log.debug("hg38 resolution failed for %s", rsid)
+        return None
 
     @staticmethod
     def _normalize_variant_id(variant_id: str) -> str:
@@ -177,12 +213,17 @@ class MyVariant:
         # dbSNP
         dbsnp = data.get("dbsnp")
         if dbsnp:
+            hg19 = dbsnp.get("hg19", {}) if isinstance(dbsnp.get("hg19"), dict) else {}
+            rsid = dbsnp.get("rsid")
+            chrom = dbsnp.get("chrom")
             result["dbsnp"] = {
-                "rsid": dbsnp.get("rsid"),
+                "rsid": rsid,
                 "ref": dbsnp.get("ref"),
                 "alt": dbsnp.get("alt"),
-                "chrom": dbsnp.get("chrom"),
-                "position": dbsnp.get("hg19", {}).get("start") if isinstance(dbsnp.get("hg19"), dict) else None,
+                "chrom": chrom,
+                "position_hg19": hg19.get("start"),
+                "position_hg38": self._resolve_hg38(rsid, chrom),
+                "assembly_note": "position_hg38 is GRCh38. position_hg19 is GRCh37. Use hg38 for current pipelines.",
             }
 
         # CIViC

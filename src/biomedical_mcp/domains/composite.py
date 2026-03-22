@@ -66,7 +66,7 @@ def create_server(cache: Cache) -> FastMCP:
         results = _gather_sync(
             lambda: myvariant.lookup(variant_id),
             lambda: litvar.variant_publications(variant_id, limit=5),
-            lambda: gnomad.variant_frequency(variant_id) if not variant_id.startswith("rs") else {"note": "Use gnomAD-style ID for frequency"},
+            lambda: gnomad.variant_frequency(variant_id),
         )
         mv_result, lit_result, gn_result = results
 

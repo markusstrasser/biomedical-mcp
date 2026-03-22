@@ -28,9 +28,14 @@ class GWASCatalog(BaseClient):
                 f"/singleNucleotidePolymorphisms/{rsid}/associations",
                 params={"projection": "associationBySnp"},
             )
-        except Exception:
+        except Exception as exc:
+            import httpx as _httpx
+            if isinstance(exc, _httpx.HTTPStatusError) and exc.response.status_code == 404:
+                return {"rsid": rsid, "association_count": 0, "associations": [],
+                        "note": "Variant not found in GWAS Catalog"}
+            log.warning("GWAS Catalog API error for %s: %s", rsid, exc)
             return {"rsid": rsid, "association_count": 0, "associations": [],
-                    "note": "Variant not found in GWAS Catalog"}
+                    "error": "api_error", "note": f"GWAS Catalog API error: {type(exc).__name__}"}
         associations = self._extract_associations(data, limit)
         result = {
             "rsid": rsid,
@@ -95,14 +100,29 @@ class GWASCatalog(BaseClient):
                 for gene_entry in locus.get("authorReportedGenes", []):
                     genes.append(gene_entry.get("geneName"))
 
+            # Traits from efoTraits array (HAL response format)
+            efo_traits = assoc.get("efoTraits", [])
+            trait_names = [t.get("trait") for t in efo_traits if t.get("trait")]
+
+            # Study accession from _links (not available as top-level dict in projection)
+            study_accession = None
+            study_obj = assoc.get("study")
+            if isinstance(study_obj, dict):
+                study_accession = study_obj.get("accessionId")
+            elif isinstance(assoc.get("_links", {}), dict):
+                study_href = assoc.get("_links", {}).get("study", {}).get("href", "")
+                if "/studies/" in study_href:
+                    study_accession = study_href.rsplit("/studies/", 1)[-1]
+
             associations.append({
                 "pvalue": assoc.get("pvalueMantissa"),
                 "pvalue_exponent": assoc.get("pvalueExponent"),
                 "risk_allele": risk_allele,
                 "or_beta": assoc.get("orPerCopyNum"),
                 "genes": genes,
-                "trait": assoc.get("traitName"),
-                "study": assoc.get("study", {}).get("accessionId") if isinstance(assoc.get("study"), dict) else None,
+                "trait": ", ".join(trait_names) if trait_names else None,
+                "traits": trait_names,
+                "study": study_accession,
             })
         return associations
 
