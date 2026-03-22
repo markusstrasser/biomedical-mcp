@@ -126,3 +126,11 @@ class Ensembl:
         }
         self.cache.set(key, result)
         return result
+
+    def validate(self) -> bool:
+        """Health check — ping Ensembl REST API."""
+        try:
+            resp = self.client.get(f"{ENSEMBL_URL}/info/ping")
+            return resp.status_code == 200
+        except Exception:
+            return False

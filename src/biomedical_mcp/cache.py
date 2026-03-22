@@ -36,3 +36,15 @@ class Cache:
             (key, json.dumps(value)),
         )
         self.conn.commit()
+
+    def cleanup(self, max_age_days: int = 90) -> int:
+        """Delete expired cache entries older than max_age_days. Returns count deleted."""
+        cursor = self.conn.execute(
+            "DELETE FROM cache WHERE cached_at < datetime('now', ?)",
+            (f"-{max_age_days} days",),
+        )
+        deleted = cursor.rowcount
+        if deleted > 0:
+            self.conn.execute("PRAGMA optimize")
+        self.conn.commit()
+        return deleted

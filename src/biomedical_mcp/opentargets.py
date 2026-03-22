@@ -229,12 +229,16 @@ class OpenTargets:
             ],
         }
 
-    def pharmacogenetics(self, ensembl_id: str) -> dict:
+    def pharmacogenetics(self, ensembl_id: str, limit: int = 50) -> dict:
         data = self._cached("pgx", PHARMACOGENETICS_QUERY, {"id": ensembl_id})
         target = data.get("target", {})
+        all_entries = target.get("pharmacogenomics", [])
+        entries = all_entries[:limit]
         return {
             "target": target.get("approvedSymbol"),
-            "entries": target.get("pharmacogenomics", []),
+            "entries": entries,
+            "total_available": len(all_entries),
+            "truncated": len(all_entries) > limit,
         }
 
     def drug_info(self, chembl_id: str) -> dict:

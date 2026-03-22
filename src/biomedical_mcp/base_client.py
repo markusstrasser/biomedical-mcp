@@ -53,7 +53,7 @@ class BaseClient:
         self.client = httpx.Client(
             base_url=self.base_url,
             timeout=30.0,
-            headers={"User-Agent": "biomedical-mcp/0.3"},
+            headers={"User-Agent": "biomedical-mcp/0.5"},
         )
 
     def _rate_wait(self) -> None:

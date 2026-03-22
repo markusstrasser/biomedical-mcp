@@ -3,7 +3,6 @@
 These tools call multiple underlying APIs and return structured, provenance-tagged results.
 """
 
-import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
@@ -29,12 +28,13 @@ _executor = ThreadPoolExecutor(max_workers=6)
 
 def _gather_sync(*callables):
     """Run multiple sync functions concurrently via threads, return results in order."""
-    loop = asyncio.new_event_loop()
-    try:
-        futures = [loop.run_in_executor(_executor, fn) for fn in callables]
-        results = loop.run_until_complete(asyncio.gather(*futures, return_exceptions=True))
-    finally:
-        loop.close()
+    futures = [_executor.submit(fn) for fn in callables]
+    results = []
+    for future in futures:
+        try:
+            results.append(future.result(timeout=60))
+        except Exception as exc:
+            results.append({"error": f"{type(exc).__name__}: {exc}"})
     return results
 
 

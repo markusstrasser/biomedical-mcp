@@ -123,15 +123,22 @@ class GnomAD(BaseClient):
         if cached is not None:
             return {**cached, "_cache_hit": True}
 
-        data = self._graphql(_variant_query(variant_id, dataset), {})
+        try:
+            data = self._graphql(_variant_query(variant_id, dataset), {})
+        except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ReadTimeout) as exc:
+            log.warning("gnomAD API error for %s: %s", variant_id, exc)
+            return {"variant_id": variant_id, "error": "api_error",
+                    "note": f"gnomAD API error: {type(exc).__name__}"}
         variant = data.get("variant")
         if not variant:
-            return {"variant_id": variant_id, "error": "not_found"}
+            return {"variant_id": variant_id, "error": "not_found",
+                    "note": "Variant not in gnomAD (may be valid but absent from database)"}
 
         result = {
             "variant_id": variant.get("variant_id"),
             "rsids": variant.get("rsids", []),
             "dataset": dataset,
+            "assembly": "GRCh38",
         }
 
         for source in ("genome", "exome"):

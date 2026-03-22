@@ -79,6 +79,9 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
     data_dir.mkdir(parents=True, exist_ok=True)
 
     cache = Cache(data_dir / "cache.db")
+    evicted = cache.cleanup(max_age_days=90)
+    if evicted:
+        log.info("bio-mcp cache cleanup: evicted %d expired entries", evicted)
     log.info("bio-mcp started (cache: %s)", data_dir / "cache.db")
 
     main = FastMCP(
