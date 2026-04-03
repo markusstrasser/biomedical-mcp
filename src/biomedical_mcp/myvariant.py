@@ -14,7 +14,8 @@ MYVARIANT_BASE = "https://myvariant.info/v1"
 
 DEFAULT_FIELDS = (
     "clinvar,gnomad_exome,gnomad_genome,cadd,dbnsfp.genename,"
-    "dbnsfp.sift,dbnsfp.polyphen2,dbsnp,civic,snpedia"
+    "dbnsfp.sift,dbnsfp.polyphen2,dbsnp,civic,snpedia,"
+    "cgi,cosmic"
 )
 
 
@@ -239,6 +240,41 @@ class MyVariant:
         snpedia = data.get("snpedia")
         if snpedia:
             result["snpedia"] = {"text": snpedia.get("text", "")[:500]}
+
+        # Cancer Genome Interpreter (CGI) — drug associations from MyVariant
+        cgi = data.get("cgi")
+        if cgi:
+            if isinstance(cgi, dict):
+                cgi = [cgi]
+            if isinstance(cgi, list):
+                result["cgi"] = [
+                    {
+                        "gene": entry.get("gene"),
+                        "drug": entry.get("drug"),
+                        "association": entry.get("association"),
+                        "tumor_type": entry.get("primary_tumor_type"),
+                        "evidence_level": entry.get("evidence_level"),
+                        "source": entry.get("source"),
+                    }
+                    for entry in cgi[:10]
+                ]
+
+        # COSMIC — somatic mutation context from MyVariant
+        cosmic = data.get("cosmic")
+        if cosmic:
+            if isinstance(cosmic, dict):
+                cosmic = [cosmic]
+            if isinstance(cosmic, list):
+                result["cosmic"] = [
+                    {
+                        "cosmic_id": entry.get("cosmic_id"),
+                        "tumor_site": entry.get("tumor_site"),
+                        "mutation_nt": entry.get("mut_nt"),
+                        "mutation_aa": entry.get("mut_aa"),
+                        "mutation_freq": entry.get("mut_freq"),
+                    }
+                    for entry in cosmic[:10]
+                ]
 
         return result
 
