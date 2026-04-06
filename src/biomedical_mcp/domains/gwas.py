@@ -41,4 +41,18 @@ def create_server(cache: Cache) -> FastMCP:
         """
         return gwas.trait_search(query, limit=limit)
 
+    @server.tool(tags={"variant-review", "surveillance"})
+    def new_for_variants(rsids: list[str], since_date: str = "") -> dict:
+        """Check GWAS Catalog for new associations for a list of rsIDs.
+
+        Useful for surveillance: "have any of my variants gained new GWAS hits?"
+        Caps at 50 rsIDs per call.
+
+        Args:
+            rsids: List of dbSNP rsIDs (e.g. ["rs1801133", "rs7903146"]). Max 50.
+            since_date: Optional ISO date filter (e.g. "2024-01-01"). Only return
+                        associations published after this date.
+        """
+        return gwas.new_for_variants(rsids, since_date=since_date)
+
     return server

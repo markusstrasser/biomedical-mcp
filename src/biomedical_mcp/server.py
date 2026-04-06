@@ -1,10 +1,11 @@
-"""Bio MCP server — 25 APIs, ~80 tools across 14 domains.
+"""Bio MCP server — 32 APIs, ~85 tools across 20 domains.
 
 Uses FastMCP 3 mount() composition: each domain is a sub-server with
 namespace-prefixed tools for discoverability.
 
 Domains: genetics, targets, drugs, proteins, pathways, variants, clinical,
-         population, panels, phenotype, expression, gwas, literature.
+         population, panels, phenotype, expression, gwas, literature,
+         bloodgroups, rare_disease, curation, supplements, nutrition.
 """
 
 import logging
@@ -18,7 +19,7 @@ from biomedical_mcp.middleware import TelemetryMiddleware
 from biomedical_mcp.domains import (
     genetics, targets, drugs, proteins, pathways, variants, clinical,
     population, panels, phenotype, expression, gwas, literature, composite,
-    bloodgroups, rare_disease, curation,
+    bloodgroups, rare_disease, curation, supplements, nutrition,
 )
 
 log = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ log = logging.getLogger(__name__)
 DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "biomedical-mcp"
 
 INSTRUCTIONS = """\
-Biomedical data lookup via 30 APIs across 18 domains. Tools are namespace-prefixed.
+Biomedical data lookup via 32 APIs across 20 domains. Tools are namespace-prefixed.
 
 DOMAINS:
   genetics_*      — gene annotation, IDs, sequences, nomenclature (MyGene, Ensembl, HGNC)
@@ -39,13 +40,15 @@ DOMAINS:
   population_*    — allele frequencies, constraint (gnomAD)
   expression_*    — tissue expression, eQTLs (GTEx)
   panels_*        — curated gene panels by condition (PanelApp)
-  gwas_*          — GWAS variant-trait associations (GWAS Catalog)
+  gwas_*          — GWAS variant-trait associations, variant surveillance (GWAS Catalog)
   phenotype_*     — phenotype terms, gene-phenotype (HPO, Monarch)
   literature_*    — variant-level literature mining (LitVar2)
   composite_*     — multi-API compound queries (variant_context, gene_dossier)
   bloodgroups_*   — blood group systems, alleles, antigens (ISBT)
   rare_disease_*  — rare disease data, inheritance, epidemiology (Orphanet)
   curation_*      — gene-disease validity, dosage sensitivity (ClinGen)
+  supplements_*   — adverse events (FDA CAERS), label verification (NIH DSLD), PGx (PharmGKB)
+  nutrition_*     — food nutrient composition (USDA FoodData Central)
 
 QUICK REFERENCE:
   Gene lookup:        genetics_gene_info, genetics_ensembl_gene, genetics_gene_names
@@ -61,7 +64,7 @@ QUICK REFERENCE:
   Gene constraint:    population_gene_constraint
   Gene panels:        panels_gene_panels
   Tissue expression:  expression_gene_expression
-  GWAS hits:          gwas_variant_associations
+  GWAS hits:          gwas_variant_associations, gwas_new_for_variants
   Phenotypes:         phenotype_gene_phenotypes, phenotype_hpo_search
   Literature:         literature_variant_publications
   Protein domains:    proteins_domains (InterPro)
@@ -69,6 +72,9 @@ QUICK REFERENCE:
   Blood groups:       bloodgroups_systems, bloodgroups_alleles, bloodgroups_search_alleles
   Rare diseases:      rare_disease_gene_rare_diseases, rare_disease_disease_natural_history
   Gene-disease proof: curation_gene_validity, curation_gene_dosage
+  Supplement safety:  supplements_adverse_events, supplements_label_verify
+  PGx interactions:   supplements_pharmgkb_lookup
+  Food nutrients:     nutrition_food_nutrients
   EVERYTHING about a variant: composite_variant_context
   EVERYTHING about a gene:    composite_gene_dossier
 """
@@ -112,6 +118,10 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
     main.mount(bloodgroups.create_server(cache), namespace="bloodgroups")
     main.mount(rare_disease.create_server(cache), namespace="rare_disease")
     main.mount(curation.create_server(cache), namespace="curation")
+
+    # Supplements & nutrition (2)
+    main.mount(supplements.create_server(cache), namespace="supplements")
+    main.mount(nutrition.create_server(cache), namespace="nutrition")
 
     # Prompt templates — structured review workflows
     @main.prompt()

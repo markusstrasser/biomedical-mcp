@@ -39,6 +39,9 @@ DOMAINS: dict[str, dict] = {
     # New: ISBT, Orphanet, ClinGen
     "isbt":            {"base_url": "https://api-blooddatabase.isbtweb.org",            "ttl_days": TTL_STABLE,   "rate_limit": 3.0},
     "orphanet":        {"base_url": "https://api.orphadata.com",                        "ttl_days": TTL_CURATED,  "rate_limit": 3.0},
+    # Supplements & nutrition
+    "supplements":     {"base_url": "https://api.fda.gov",                              "ttl_days": TTL_CURATED,  "rate_limit": 4.0},
+    "nutrition":       {"base_url": "https://api.nal.usda.gov",                         "ttl_days": TTL_STABLE,   "rate_limit": 3.0},
 }
 
 

@@ -126,6 +126,58 @@ class GWASCatalog(BaseClient):
             })
         return associations
 
+    def new_for_variants(self, rsids: list[str], since_date: str = "") -> dict:
+        """Check for new GWAS associations for a list of rsIDs.
+
+        Args:
+            rsids: List of rsIDs (max 50).
+            since_date: ISO date filter (e.g. "2024-01-01"). Only return associations
+                        with lastUpdateDate after this date.
+        """
+        if len(rsids) > 50:
+            return {"error": "Too many rsIDs — max 50 per call", "count": len(rsids)}
+
+        per_variant = {}
+        for rsid in rsids:
+            assoc_data = self.variant_associations(rsid, limit=100)
+            associations = assoc_data.get("associations", [])
+
+            if since_date and associations:
+                # Filter by study date if available in the association data
+                filtered = []
+                for a in associations:
+                    study_acc = a.get("study")
+                    # GWAS Catalog associations don't embed dates directly,
+                    # so we fetch study metadata when a date filter is needed
+                    if study_acc and since_date:
+                        try:
+                            study_data, _ = self._cached_get(
+                                "study_detail", f"/studies/{study_acc}",
+                            )
+                            pub_date = ""
+                            if isinstance(study_data, dict):
+                                pub_date = study_data.get("publicationDate", "")
+                            if pub_date >= since_date:
+                                a["publication_date"] = pub_date
+                                filtered.append(a)
+                        except Exception:
+                            # Include association if we can't verify the date
+                            filtered.append(a)
+                    else:
+                        filtered.append(a)
+                associations = filtered
+
+            per_variant[rsid] = {
+                "association_count": len(associations),
+                "associations": associations,
+            }
+
+        return {
+            "variant_count": len(rsids),
+            "since_date": since_date or None,
+            "variants": per_variant,
+        }
+
     def validate(self) -> bool:
         try:
             self._get("/metadata")
