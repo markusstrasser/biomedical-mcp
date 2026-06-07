@@ -15,6 +15,15 @@ dev = ["pytest>=8.0", "pytest-httpx>=0.35"]
 [project.scripts]
 biomedical-mcp = "biomedical_mcp.server:main"
 
+[tool.pyright]
+# Point Pyright at the uv venv so third-party + workspace imports resolve.
+# Without this the diagnostic channel floods with false "could not be resolved",
+# which trains agents to ignore diagnostics and buries real type errors.
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
+extraPaths = ["src"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/biomedical_mcp"]
 
