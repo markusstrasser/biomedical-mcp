@@ -19,12 +19,21 @@ from fastmcp import FastMCP
 from biomedical_mcp.cache import Cache
 from biomedical_mcp.composite_core import run_sections, describe
 from biomedical_mcp import entities
+from biomedical_mcp.mygene import MyGene
+from biomedical_mcp.opentargets import OpenTargets
+from biomedical_mcp.uniprot import UniProt
+from biomedical_mcp.monarch import Monarch
 
 log = logging.getLogger(__name__)
 
 
 def create_server(cache: Cache) -> FastMCP:
     clients = entities.build_clients(cache)
+    # Search clients for bio_search (name/keyword → identifier resolution).
+    search_clients = {
+        "mygene": MyGene(cache), "opentargets": OpenTargets(cache),
+        "uniprot": UniProt(cache), "monarch": Monarch(cache),
+    }
     server = FastMCP("composite")
 
     def _make(mod):
@@ -63,6 +72,34 @@ def create_server(cache: Cache) -> FastMCP:
                 "valid_entities": [e for e, m in idx.items() if m],
             }
         return describe(entity, meta)
+
+    @server.tool(tags={"discovery"})
+    def bio_search(entity: str, query: str, limit: int = 10) -> dict:
+        """Resolve a name/keyword to candidate identifiers, then call the matching
+        composite (gene_dossier, drug_profile, etc.) with the returned id.
+
+        Args:
+            entity: One of "gene", "drug", "protein", "disease".
+            query: Free-text name or keyword (e.g. "cytochrome P450", "imatinib").
+            limit: Max results (default 10).
+        """
+        e = entity.lower()
+        try:
+            if e == "gene":
+                hits = search_clients["mygene"].search(query, limit=limit)
+            elif e == "drug":
+                hits = search_clients["opentargets"].search(query, entity_type="drug", limit=limit)
+            elif e == "protein":
+                hits = search_clients["uniprot"].search(query, limit=limit)
+            elif e == "disease":
+                hits = search_clients["monarch"].search(query, category="disease", limit=limit)
+            else:
+                return {"error": f"search not supported for entity '{entity}'",
+                        "supported": ["gene", "drug", "protein", "disease"]}
+            return {"entity": e, "query": query, "results": hits,
+                    "next": f"call composite_{e}_dossier / composite_{e}_profile with a result id"}
+        except Exception as exc:  # noqa: BLE001
+            return {"error": f"{type(exc).__name__}: {exc}", "entity": e, "query": query}
 
     @server.tool(tags={"admin"})
     def health_check() -> dict:

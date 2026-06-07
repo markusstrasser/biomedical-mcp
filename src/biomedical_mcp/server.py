@@ -80,6 +80,33 @@ QUICK REFERENCE:
 """
 
 
+COMPOSITE_INSTRUCTIONS = """\
+Biomedical data lookup via 5 entity composites (default profile). Each composite fans
+out across many upstream APIs and returns a standardized partial-failure envelope:
+one dead source degrades only its section (status="error"), never the whole result.
+
+ENTITY COMPOSITES (pass `identifier`; optional `sections` to fetch a subset):
+  composite_gene_dossier(identifier)      — gene: nomenclature, constraint, panels,
+                                            expression, phenotypes, validity, dosage, rare diseases
+  composite_variant_context(identifier)   — variant (rsID/HGVS/"BRAF V600E"): annotation
+                                            (ClinVar/predictions/CGI/COSMIC), pop freq, literature, GWAS
+  composite_drug_profile(identifier)      — drug: compound, mechanism, label, adverse events (+indications, recalls)
+  composite_protein_profile(identifier)   — protein (gene symbol/UniProt acc): function, variants,
+                                            structure, domains, experimental structures (+interactions)
+  composite_disease_profile(identifier)   — disease (name/MONDO/ORPHA/OMIM/EFO): associations,
+                                            phenotypes, natural history, epidemiology, genes, coding
+
+DISCOVERY:
+  composite_describe_sections(entity)     — list a composite's sections, sources, descriptions
+  composite_bio_search(entity, query)     — resolve a name/keyword to identifiers, then call the composite
+  composite_health_check()                — upstream API connectivity
+
+Set BIOMEDICAL_MCP_PROFILE=full to additionally expose ~85 raw per-source tools
+(sequence retrieval, clinical trials, pathways, supplements, nutrition, blood groups,
+HPO/gene search, eQTLs, and other long-tail capabilities not yet in a composite section).
+"""
+
+
 def create_mcp(data_dir: Path | None = None) -> FastMCP:
     data_dir = data_dir or Path(os.environ.get("BIOMEDICAL_MCP_DATA", DEFAULT_DATA_DIR))
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -90,38 +117,43 @@ def create_mcp(data_dir: Path | None = None) -> FastMCP:
         log.info("bio-mcp cache cleanup: evicted %d expired entries", evicted)
     log.info("bio-mcp started (cache: %s)", data_dir / "cache.db")
 
+    profile = os.environ.get("BIOMEDICAL_MCP_PROFILE", "composite").lower()
+
     main = FastMCP(
         "bio",
-        instructions=INSTRUCTIONS,
+        instructions=INSTRUCTIONS if profile == "full" else COMPOSITE_INSTRUCTIONS,
         middleware=[TelemetryMiddleware()],
     )
 
-    # Existing domains (7)
-    main.mount(genetics.create_server(cache), namespace="genetics")
-    main.mount(targets.create_server(cache), namespace="targets")
-    main.mount(drugs.create_server(cache), namespace="drugs")
-    main.mount(proteins.create_server(cache), namespace="proteins")
-    main.mount(pathways.create_server(cache), namespace="pathways")
-    main.mount(variants.create_server(cache), namespace="variants")
-    main.mount(clinical.create_server(cache), namespace="clinical")
-
-    # New domains (6)
-    main.mount(population.create_server(cache), namespace="population")
-    main.mount(panels.create_server(cache), namespace="panels")
-    main.mount(phenotype.create_server(cache), namespace="phenotype")
-    main.mount(expression.create_server(cache), namespace="expression")
-    main.mount(gwas.create_server(cache), namespace="gwas")
-    main.mount(literature.create_server(cache), namespace="literature")
+    # Default ("composite") profile: the consolidated entity-composite surface only
+    # (gene_dossier, variant_context, drug_profile, protein_profile, disease_profile,
+    # describe_sections, bio_search, health_check). ~85 raw per-source tools are NOT
+    # loaded — this is the at-rest-token win. See
+    # agent-infra/decisions/2026-06-07-biomedical-mcp-tool-consolidation.md.
     main.mount(composite.create_server(cache), namespace="composite")
 
-    # New domains (3)
-    main.mount(bloodgroups.create_server(cache), namespace="bloodgroups")
-    main.mount(rare_disease.create_server(cache), namespace="rare_disease")
-    main.mount(curation.create_server(cache), namespace="curation")
-
-    # Supplements & nutrition (2)
-    main.mount(supplements.create_server(cache), namespace="supplements")
-    main.mount(nutrition.create_server(cache), namespace="nutrition")
+    if profile == "full":
+        # Escape hatch: every raw per-source tool, for maintenance / expert use /
+        # long-tail capability not yet promoted into a composite section.
+        log.info("bio-mcp profile=full — mounting all raw domains")
+        main.mount(genetics.create_server(cache), namespace="genetics")
+        main.mount(targets.create_server(cache), namespace="targets")
+        main.mount(drugs.create_server(cache), namespace="drugs")
+        main.mount(proteins.create_server(cache), namespace="proteins")
+        main.mount(pathways.create_server(cache), namespace="pathways")
+        main.mount(variants.create_server(cache), namespace="variants")
+        main.mount(clinical.create_server(cache), namespace="clinical")
+        main.mount(population.create_server(cache), namespace="population")
+        main.mount(panels.create_server(cache), namespace="panels")
+        main.mount(phenotype.create_server(cache), namespace="phenotype")
+        main.mount(expression.create_server(cache), namespace="expression")
+        main.mount(gwas.create_server(cache), namespace="gwas")
+        main.mount(literature.create_server(cache), namespace="literature")
+        main.mount(bloodgroups.create_server(cache), namespace="bloodgroups")
+        main.mount(rare_disease.create_server(cache), namespace="rare_disease")
+        main.mount(curation.create_server(cache), namespace="curation")
+        main.mount(supplements.create_server(cache), namespace="supplements")
+        main.mount(nutrition.create_server(cache), namespace="nutrition")
 
     # Prompt templates — structured review workflows
     @main.prompt()
