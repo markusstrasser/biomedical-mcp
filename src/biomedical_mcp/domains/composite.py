@@ -23,6 +23,8 @@ from biomedical_mcp.orphanet import Orphanet
 from biomedical_mcp.gwas_catalog import GWASCatalog
 from biomedical_mcp.provenance import make_provenance
 from biomedical_mcp.variant_input import normalize_variant
+from biomedical_mcp.composite_core import run_sections, describe
+from biomedical_mcp import composite_sections as cs
 
 log = logging.getLogger(__name__)
 
@@ -159,52 +161,48 @@ def create_server(cache: Cache) -> FastMCP:
 
         return result
 
-    @server.tool(tags={"gene-lookup"})
-    def gene_dossier(gene_symbol: str) -> dict:
-        """Comprehensive gene report: names, constraint, pathways, diseases, expression,
-        panels, gene-disease validity, dosage sensitivity, rare disease associations.
+    # Client registry passed to the section-fetcher builders. The client classes
+    # ARE the adapter layer; the registry binds sections to their methods.
+    clients = {
+        "hgnc": hgnc, "gnomad": gnomad, "panelapp": panelapp, "gtex": gtex,
+        "hpo": hpo, "clingen": clingen, "orphanet": orphanet,
+        "myvariant": myvariant, "litvar": litvar, "gwas_catalog": gwas,
+    }
 
-        Calls HGNC + gnomAD + PanelApp + GTEx + HPO + ClinGen + Orphanet concurrently.
+    @server.tool(tags={"gene-lookup"})
+    def gene_dossier(gene_symbol: str, sections: list[str] | None = None) -> dict:
+        """Comprehensive gene report via a standardized partial-failure envelope.
+
+        Sections (default: all): nomenclature, constraint, panels, expression,
+        phenotypes, gene_disease_validity, dosage_sensitivity, rare_diseases.
+        Call describe_sections("gene") to see sources and descriptions.
+
+        One dead upstream API degrades only its section (status="error"), never the
+        whole dossier. Pass `sections` to fetch a subset.
 
         Args:
             gene_symbol: Gene symbol (e.g. "BRCA1", "CYP2D6", "SCN1A").
+            sections: Subset of section names, or omit for all default sections.
         """
-        results = _gather_sync(
-            lambda: hgnc.gene_names(gene_symbol),
-            lambda: gnomad.gene_constraint(gene_symbol),
-            lambda: panelapp.gene_panels(gene_symbol, confidence="all"),
-            lambda: gtex.top_tissues(gene_symbol, limit=10),
-            lambda: hpo.gene_phenotypes(gene_symbol),
-            lambda: clingen.gene_validity(gene_symbol),
-            lambda: clingen.gene_dosage(gene_symbol),
-            lambda: orphanet.gene_diseases(gene_symbol),
-        )
-        (names_result, constraint_result, panels_result, expr_result,
-         pheno_result, validity_result, dosage_result, orphanet_result) = results
+        fetchers = cs.gene_fetchers(gene_symbol, clients)
+        return run_sections("gene", gene_symbol, sections, fetchers, cs.SECTIONS["gene"])
 
-        def safe(result):
-            return result if not isinstance(result, Exception) else {"error": str(result)}
+    @server.tool(tags={"discovery"})
+    def describe_sections(entity: str) -> dict:
+        """List the available sections for a composite entity, with sources and
+        descriptions. Use this to discover valid `sections` values before calling
+        gene_dossier / variant_context / drug_profile / protein_profile / disease_profile.
 
-        return {
-            "gene_symbol": gene_symbol,
-            "nomenclature": safe(names_result),
-            "constraint": safe(constraint_result),
-            "panels": safe(panels_result),
-            "expression": safe(expr_result),
-            "phenotypes": safe(pheno_result),
-            "gene_disease_validity": safe(validity_result),
-            "dosage_sensitivity": safe(dosage_result),
-            "rare_diseases": safe(orphanet_result),
-            "provenance": {
-                "hgnc": make_provenance("hgnc"),
-                "gnomad": make_provenance("gnomad", data_version="gnomad_r4"),
-                "panelapp": make_provenance("panelapp"),
-                "gtex": make_provenance("gtex"),
-                "hpo": make_provenance("hpo"),
-                "clingen": make_provenance("clingen_gene_validity", evidence_grade="A1"),
-                "orphanet": make_provenance("orphanet", evidence_grade="B2"),
-            },
-        }
+        Args:
+            entity: One of "gene", "variant", "drug", "protein", "disease".
+        """
+        meta = cs.SECTIONS.get(entity)
+        if meta is None:
+            return {
+                "error": f"unknown entity '{entity}'",
+                "valid_entities": sorted(cs.SECTIONS.keys()),
+            }
+        return describe(entity, meta)
 
     @server.tool(tags={"variant-review"})
     def batch_variant_lookup(variant_ids: str) -> dict:
