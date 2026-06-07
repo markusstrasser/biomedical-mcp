@@ -76,9 +76,12 @@ def test_sections_names_and_defaults():
     assert "population_frequency" in names
     assert "literature" in names
     assert "gwas" in names
-    # all four are default
-    for s in variant_entity.SECTIONS:
-        assert s.default is True
+    assert "somatic" in names
+    by_name = {s.name: s for s in variant_entity.SECTIONS}
+    # the four core sections are default; somatic (oncology) is opt-in
+    for n in ("annotation", "population_frequency", "literature", "gwas"):
+        assert by_name[n].default is True
+    assert by_name["somatic"].default is False
 
 
 def test_sections_evidence_grades():

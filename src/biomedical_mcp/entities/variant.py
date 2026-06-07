@@ -29,7 +29,7 @@ DESCRIPTION = (
     "with a suggestion to call variants_search first."
 )
 
-NEEDS = ("myvariant", "gnomad", "litvar", "gwas_catalog")
+NEEDS = ("myvariant", "gnomad", "litvar", "gwas_catalog", "somatic")
 
 SECTIONS: tuple[Section, ...] = (
     Section(
@@ -62,6 +62,14 @@ SECTIONS: tuple[Section, ...] = (
         "GWAS Catalog trait associations for the variant (rsID-based).",
         "C3",
     ),
+    Section(
+        "somatic",
+        ("somatic",),
+        False,  # oncology-specific — opt-in, not run by default
+        "Somatic/oncology annotation: CIViC clinical evidence (type, level, "
+        "significance, disease, therapies) + OncoKB oncogenicity & treatment levels. "
+        "Needs gene+protein-change input (e.g. 'BRAF V600E'); OncoKB needs ONCOKB_TOKEN.",
+    ),
 )
 
 
@@ -92,6 +100,25 @@ def _annotation_fetcher(identifier: str, myvariant_client: Any) -> dict:
     return result
 
 
+def _somatic_fetcher(identifier: str, somatic_client: Any) -> dict:
+    """Somatic annotation for gene+protein-change inputs ('BRAF V600E').
+
+    Re-parses the identifier; for rsID/HGVS (no gene+change) returns an
+    informative empty result rather than a hard failure.
+    """
+    parsed = normalize_variant(identifier)
+    if parsed.gene and parsed.protein_change:
+        return somatic_client.annotate(parsed.gene, parsed.protein_change)
+    return {
+        "gene": parsed.gene,
+        "protein_change": parsed.protein_change,
+        "civic": [],
+        "oncokb": {"error": "Somatic annotation needs gene+protein-change input "
+                            "(e.g. 'BRAF V600E')."},
+        "note": f"Input format '{parsed.format}' lacks gene+protein_change for CIViC/OncoKB.",
+    }
+
+
 def fetchers(identifier: str, clients: dict[str, Any], **opts: Any) -> dict[str, Fetcher]:
     lit_limit = opts.get("literature_limit", 5)
     c = clients
@@ -100,4 +127,5 @@ def fetchers(identifier: str, clients: dict[str, Any], **opts: Any) -> dict[str,
         "population_frequency": lambda: c["gnomad"].variant_frequency(identifier),
         "literature": lambda: c["litvar"].variant_publications(identifier, limit=lit_limit),
         "gwas": lambda: c["gwas_catalog"].variant_associations(identifier),
+        "somatic": lambda: _somatic_fetcher(identifier, c["somatic"]),
     }

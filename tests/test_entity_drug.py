@@ -151,8 +151,21 @@ class FakeOpenFDA:
         return FAKE_RECALLS
 
 
-GOOD_CLIENTS = {"chembl": FakeChEMBL(), "openfda": FakeOpenFDA()}
-BAD_CHEMBL_CLIENTS = {"chembl": FakeChEMBLUnresolvable(), "openfda": FakeOpenFDA()}
+class FakeClinPGx:
+    def pgx_for_drug(self, drug_name: str) -> list[dict]:
+        return [{"gene": "CYP2C9", "drug": drug_name, "cpic_level": "A",
+                 "guideline_url": "https://www.clinpgx.org/x"}]
+
+
+class FakeDDInter:
+    def interactions(self, drug_name: str, limit: int = 25) -> list[dict]:
+        return [{"interacting_drug": "warfarin", "severity": "Major", "mechanism": "PD"}]
+
+
+GOOD_CLIENTS = {"chembl": FakeChEMBL(), "openfda": FakeOpenFDA(),
+                "clinpgx": FakeClinPGx(), "ddinter": FakeDDInter()}
+BAD_CHEMBL_CLIENTS = {"chembl": FakeChEMBLUnresolvable(), "openfda": FakeOpenFDA(),
+                      "clinpgx": FakeClinPGx(), "ddinter": FakeDDInter()}
 
 
 # ── Module export tests ───────────────────────────────────────────────────────
@@ -177,17 +190,17 @@ def test_module_exports_needs():
 
 def test_module_exports_six_sections():
     names = {s.name for s in drug_entity.SECTIONS}
-    assert names == {"compound", "mechanism", "label", "adverse_events", "indications", "recalls"}
+    assert names == {"compound", "mechanism", "label", "adverse_events", "indications", "recalls", "pharmacogenomics", "interactions"}
 
 
 def test_default_sections_are_compound_mechanism_label_adverse_events():
     defaults = {s.name for s in drug_entity.SECTIONS if s.default}
-    assert defaults == {"compound", "mechanism", "label", "adverse_events"}
+    assert defaults == {"compound", "mechanism", "label", "adverse_events", "pharmacogenomics"}
 
 
 def test_non_default_sections_are_indications_and_recalls():
     non_defaults = {s.name for s in drug_entity.SECTIONS if not s.default}
-    assert non_defaults == {"indications", "recalls"}
+    assert non_defaults == {"indications", "recalls", "interactions"}
 
 
 def test_sources_correct():
@@ -222,7 +235,7 @@ def test_default_sections_run_and_overall_ok():
     assert env["id"] == "aspirin"
     assert env["overall_status"] == "ok"
     # Only default sections should run when sections=None
-    assert set(env["sections"]) == {"compound", "mechanism", "label", "adverse_events"}
+    assert set(env["sections"]) == {"compound", "mechanism", "label", "adverse_events", "pharmacogenomics"}
 
 
 def test_compound_section_data():
@@ -283,8 +296,7 @@ def test_all_six_sections_explicit():
     all_sections = [s.name for s in drug_entity.SECTIONS]
     env = run_sections("drug", "aspirin", all_sections, fs, drug_entity.SECTIONS)
     assert env["overall_status"] == "ok"
-    assert set(env["sections"]) == {"compound", "mechanism", "label", "adverse_events",
-                                    "indications", "recalls"}
+    assert set(env["sections"]) == {"compound", "mechanism", "label", "adverse_events", "indications", "recalls", "pharmacogenomics", "interactions"}
 
 
 # ── ChEMBL resolve failure → partial degradation ─────────────────────────────
@@ -333,7 +345,7 @@ def test_describe_drug_lists_all_sections():
     d = describe("drug", drug_entity.SECTIONS)
     assert d["entity"] == "drug"
     names = {s["name"] for s in d["sections"]}
-    assert names == {"compound", "mechanism", "label", "adverse_events", "indications", "recalls"}
+    assert names == {"compound", "mechanism", "label", "adverse_events", "indications", "recalls", "pharmacogenomics", "interactions"}
 
 
 def test_describe_carries_default_flags():

@@ -42,6 +42,10 @@ DOMAINS: dict[str, dict] = {
     # Supplements & nutrition
     "supplements":     {"base_url": "https://api.fda.gov",                              "ttl_days": TTL_CURATED,  "rate_limit": 4.0},
     "nutrition":       {"base_url": "https://api.nal.usda.gov",                         "ttl_days": TTL_STABLE,   "rate_limit": 3.0},
+    # Phase 4 sources: pharmacogenomics (CPIC/ClinPGx), drug-drug interactions, somatic
+    "clinpgx":         {"base_url": "https://api.cpicpgx.org/v1",                       "ttl_days": TTL_STABLE,   "rate_limit": 3.0},
+    "ddinter":         {"base_url": "https://ddinter2.scbdd.com",                       "ttl_days": TTL_CURATED,  "rate_limit": 1.0},
+    "somatic":         {"base_url": "https://civicdb.org/api/graphql",                  "ttl_days": TTL_CURATED,  "rate_limit": 2.0},
 }
 
 

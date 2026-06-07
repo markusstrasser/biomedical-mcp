@@ -31,7 +31,7 @@ DESCRIPTION = (
     "Pass `identifier` = gene symbol (e.g. 'BRCA1', 'CYP2D6')."
 )
 
-NEEDS = ("hgnc", "gnomad", "panelapp", "gtex", "hpo", "clingen", "orphanet")
+NEEDS = ("hgnc", "gnomad", "panelapp", "gtex", "hpo", "clingen", "orphanet", "clinpgx")
 
 SECTIONS: tuple[Section, ...] = (
     Section("nomenclature", ("hgnc",), True,
@@ -50,6 +50,9 @@ SECTIONS: tuple[Section, ...] = (
             "ClinGen haploinsufficiency / triplosensitivity dosage scores."),
     Section("rare_diseases", ("orphanet",), True,
             "Orphanet rare-disease associations, inheritance, epidemiology.", "B2"),
+    Section("pharmacogenomics", ("clinpgx",), True,
+            "CPIC/ClinPGx gene-drug pairs (all drugs whose metabolism this gene "
+            "affects), CPIC levels, guideline URLs, phenotype→recommendation rows."),
 )
 
 
@@ -74,4 +77,5 @@ def fetchers(identifier: str, clients: dict[str, Any], **opts: Any) -> dict[str,
         "gene_disease_validity": lambda: c["clingen"].gene_validity(identifier),
         "dosage_sensitivity": lambda: c["clingen"].gene_dosage(identifier),
         "rare_diseases": lambda: c["orphanet"].gene_diseases(identifier),
+        "pharmacogenomics": lambda: c["clinpgx"].pgx_for_gene(identifier),
     }

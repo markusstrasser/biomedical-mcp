@@ -124,10 +124,13 @@ def test_gene_fetchers_bind_to_clients_and_run():
     class FakeOrphanet:
         def gene_diseases(self, s): return [{"orpha": "ORPHA:145"}]
 
+    class FakeClinPGx:
+        def pgx_for_gene(self, s): return [{"drug": "warfarin", "cpic_level": "A"}]
+
     clients = {
         "hgnc": FakeHGNC(), "gnomad": FakeGnomad(), "panelapp": FakePanelApp(),
         "gtex": FakeGTEx(), "hpo": FakeHPO(), "clingen": FakeClinGen(),
-        "orphanet": FakeOrphanet(),
+        "orphanet": FakeOrphanet(), "clinpgx": FakeClinPGx(),
     }
     fetchers = gene_entity.fetchers("BRCA1", clients)
     env = run_sections("gene", "BRCA1", None, fetchers, gene_entity.SECTIONS)

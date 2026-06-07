@@ -50,7 +50,7 @@ DESCRIPTION = (
     "Pass `identifier` = generic or brand drug name (e.g. 'aspirin', 'ibuprofen', 'atorvastatin')."
 )
 
-NEEDS = ("chembl", "openfda")
+NEEDS = ("chembl", "openfda", "clinpgx", "ddinter")
 
 SECTIONS: tuple[Section, ...] = (
     Section(
@@ -95,6 +95,21 @@ SECTIONS: tuple[Section, ...] = (
         False,  # non-default
         "FDA drug recall enforcement reports: reason, classification (Class I/II/III), "
         "status, and product description.",
+    ),
+    Section(
+        "pharmacogenomics",
+        ("clinpgx",),
+        True,
+        "CPIC/ClinPGx pharmacogenomics: gene-drug pairs with CPIC level (A–D), "
+        "guideline URLs, and phenotype→dose recommendations (e.g. CYP2D6 Poor "
+        "Metabolizer → avoid codeine). Sorted by CPIC level (A = highest evidence).",
+    ),
+    Section(
+        "interactions",
+        ("ddinter",),
+        False,  # opt-in: DDInter has no official API (web-UI endpoints, ~1 req/s)
+        "Drug-drug interactions with severity (DDInter): interacting drug, "
+        "severity (Major/Moderate/Minor), and mechanism category.",
     ),
 )
 
@@ -157,4 +172,6 @@ def fetchers(identifier: str, clients: dict[str, Any], **opts: Any) -> dict[str,
         "adverse_events": lambda: c["openfda"].adverse_events(identifier),
         "indications": _indications,
         "recalls": lambda: c["openfda"].recalls(identifier),
+        "pharmacogenomics": lambda: c["clinpgx"].pgx_for_drug(identifier),
+        "interactions": lambda: c["ddinter"].interactions(identifier),
     }

@@ -37,6 +37,9 @@ from biomedical_mcp.interpro import InterPro
 from biomedical_mcp.pdb import PDB
 from biomedical_mcp.monarch import Monarch
 from biomedical_mcp.icd10 import ICD10
+from biomedical_mcp.clinpgx import ClinPGx
+from biomedical_mcp.ddinter import DDInter
+from biomedical_mcp.somatic import Somatic
 
 from biomedical_mcp.entities import gene, variant, drug, protein, disease
 
@@ -47,6 +50,7 @@ CLIENT_FACTORY: dict[str, Callable[[Cache], Any]] = {
     "openfda": OpenFDA, "opentargets": OpenTargets, "pharmvar": PharmVar,
     "uniprot": UniProt, "alphafold": AlphaFold, "stringdb": StringDB,
     "interpro": InterPro, "pdb": PDB, "monarch": Monarch, "icd10": ICD10,
+    "clinpgx": ClinPGx, "ddinter": DDInter, "somatic": Somatic,
 }
 
 ENTITY_MODULES = [gene, variant, drug, protein, disease]
