@@ -1,11 +1,16 @@
-"""Bio MCP server — 32 APIs, ~85 tools across 20 domains.
+"""Bio MCP server — consolidated entity-composite surface over 35 biomedical APIs.
 
-Uses FastMCP 3 mount() composition: each domain is a sub-server with
-namespace-prefixed tools for discoverability.
+Default profile ("composite"): 5 entity composites (gene_dossier, variant_context,
+drug_profile, protein_profile, disease_profile) + describe_sections + bio_search +
+health_check — 8 tools, ~1.2k at-rest tokens. Each composite fans out across many
+APIs and returns a standardized partial-failure envelope.
 
-Domains: genetics, targets, drugs, proteins, pathways, variants, clinical,
-         population, panels, phenotype, expression, gwas, literature,
-         bloodgroups, rare_disease, curation, supplements, nutrition.
+`full` profile (BIOMEDICAL_MCP_PROFILE=full): additionally mounts ~85 raw per-source
+tools across 20 domains (genetics, targets, drugs, proteins, pathways, variants,
+clinical, population, panels, phenotype, expression, gwas, literature, bloodgroups,
+rare_disease, curation, supplements, nutrition) for long-tail capability + maintenance.
+
+Consolidation rationale: decisions/2026-06-07-biomedical-mcp-tool-consolidation.md (agent-infra).
 """
 
 import logging
