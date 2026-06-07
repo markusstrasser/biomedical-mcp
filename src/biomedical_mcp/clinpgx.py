@@ -24,7 +24,7 @@ import httpx
 
 from biomedical_mcp.base_client import BaseClient
 from biomedical_mcp.cache import Cache
-from biomedical_mcp.errors import NotFoundError, SourceUnavailableError
+from biomedical_mcp.errors import SourceUnavailableError
 
 log = logging.getLogger(__name__)
 
@@ -157,7 +157,7 @@ class ClinPGx(BaseClient):
             }
 
         Raises:
-            NotFoundError: if no pairs found for this drug.
+            Empty pairs list if no CPIC data for this drug (not an error).
             SourceUnavailableError: on network failure.
         """
         drug_lower = drug_name.strip().lower()
@@ -169,12 +169,10 @@ class ClinPGx(BaseClient):
             ) from exc
 
         if not pairs:
-            raise NotFoundError(
-                "Drug",
-                drug_name,
-                "Check spelling or try the generic name. "
-                "Not all drugs have CPIC guidelines.",
-            )
+            # No CPIC pairs is a valid "no data" answer (most drugs aren't
+            # pharmacogenes) — return empty so a composite section reads as
+            # empty, not error. Don't raise.
+            return {"drug": drug_lower, "pairs": [], "pair_count": 0, "source": "cpic"}
 
         # Build results — fetch recs per unique drug name (usually just the one)
         drug_names_in_pairs = {p["drugname"] for p in pairs if p.get("drugname")}
@@ -217,7 +215,7 @@ class ClinPGx(BaseClient):
             }
 
         Raises:
-            NotFoundError: if no pairs found for this gene.
+            Empty pairs list if no CPIC data for this gene (not an error).
             SourceUnavailableError: on network failure.
         """
         gene_upper = gene_symbol.strip().upper()
@@ -229,12 +227,10 @@ class ClinPGx(BaseClient):
             ) from exc
 
         if not pairs:
-            raise NotFoundError(
-                "Gene",
-                gene_symbol,
-                "Check the gene symbol (use HGNC format, e.g. CYP2D6). "
-                "Not all genes have CPIC guidelines.",
-            )
+            # No CPIC pairs is a valid "no data" answer (most genes aren't
+            # pharmacogenes) — return empty so a composite section reads as
+            # empty, not error. Don't raise.
+            return {"gene": gene_upper, "pairs": [], "pair_count": 0, "source": "cpic"}
 
         # Fetch recommendations per drug; cache means repeated calls are free
         recs_by_drug: dict[str, list[dict]] = {}

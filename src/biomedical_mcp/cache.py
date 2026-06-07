@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 
 SCHEMA = """
@@ -21,30 +22,39 @@ class Cache:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.executescript(SCHEMA)
+        # The composites run sections on a ThreadPoolExecutor and share this one
+        # connection. check_same_thread=False ALLOWS sharing but a sqlite3
+        # connection is NOT safe for concurrent execute() — two threads racing on
+        # it raise "InterfaceError: bad parameter or other API misuse". Serialize
+        # all access with a lock. (Caught by the live smoke, 2026-06-07.)
+        self._lock = threading.Lock()
 
     def get(self, key: str, max_age_days: int = 7) -> dict | list | None:
-        row = self.conn.execute(
-            """SELECT response FROM cache
-               WHERE cache_key = ? AND cached_at > datetime('now', ?)""",
-            (key, f"-{max_age_days} days"),
-        ).fetchone()
+        with self._lock:
+            row = self.conn.execute(
+                """SELECT response FROM cache
+                   WHERE cache_key = ? AND cached_at > datetime('now', ?)""",
+                (key, f"-{max_age_days} days"),
+            ).fetchone()
         return json.loads(row[0]) if row else None
 
     def set(self, key: str, value) -> None:
-        self.conn.execute(
-            "INSERT OR REPLACE INTO cache (cache_key, response) VALUES (?, ?)",
-            (key, json.dumps(value)),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO cache (cache_key, response) VALUES (?, ?)",
+                (key, json.dumps(value)),
+            )
+            self.conn.commit()
 
     def cleanup(self, max_age_days: int = 90) -> int:
         """Delete expired cache entries older than max_age_days. Returns count deleted."""
-        cursor = self.conn.execute(
-            "DELETE FROM cache WHERE cached_at < datetime('now', ?)",
-            (f"-{max_age_days} days",),
-        )
-        deleted = cursor.rowcount
-        if deleted > 0:
-            self.conn.execute("PRAGMA optimize")
-        self.conn.commit()
+        with self._lock:
+            cursor = self.conn.execute(
+                "DELETE FROM cache WHERE cached_at < datetime('now', ?)",
+                (f"-{max_age_days} days",),
+            )
+            deleted = cursor.rowcount
+            if deleted > 0:
+                self.conn.execute("PRAGMA optimize")
+            self.conn.commit()
         return deleted

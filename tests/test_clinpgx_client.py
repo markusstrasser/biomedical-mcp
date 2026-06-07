@@ -10,7 +10,7 @@ import pytest
 
 from biomedical_mcp.cache import Cache
 from biomedical_mcp.clinpgx import ClinPGx, _level_rank
-from biomedical_mcp.errors import NotFoundError, SourceUnavailableError
+from biomedical_mcp.errors import SourceUnavailableError
 
 
 # ── Canned fixture data (PostgREST shapes from live API probing) ──────────────
@@ -223,10 +223,13 @@ class TestPgxForDrug:
         cyp2d6_pair = next(p for p in result["pairs"] if p["gene"] == "CYP2D6")
         assert cyp2d6_pair["guideline_url"].startswith("https://")
 
-    def test_not_found_raises(self, client, monkeypatch):
+    def test_no_pairs_returns_empty_not_raises(self, client, monkeypatch):
+        # No CPIC pairs is valid "no data" — empty result, not an exception,
+        # so composite sections read as empty rather than error.
         monkeypatch.setattr(client, "_cached_get", lambda *a, **kw: ([], False))
-        with pytest.raises(NotFoundError):
-            client.pgx_for_drug("nonexistent_drug_xyz")
+        result = client.pgx_for_drug("nonexistent_drug_xyz")
+        assert result["pair_count"] == 0
+        assert result["pairs"] == []
 
     def test_network_error_raises_source_unavailable(self, client, monkeypatch):
         import httpx
@@ -291,10 +294,11 @@ class TestPgxForGene:
         pair_call = next(c for c in calls if c and "genesymbol" in c)
         assert pair_call["genesymbol"] == "eq.CYP2D6"
 
-    def test_not_found_raises(self, client, monkeypatch):
+    def test_no_pairs_returns_empty_not_raises(self, client, monkeypatch):
         monkeypatch.setattr(client, "_cached_get", lambda *a, **kw: ([], False))
-        with pytest.raises(NotFoundError):
-            client.pgx_for_gene("NOTAREAL_GENE")
+        result = client.pgx_for_gene("NOTAREAL_GENE")
+        assert result["pair_count"] == 0
+        assert result["pairs"] == []
 
     def test_network_error_raises_source_unavailable(self, client, monkeypatch):
         import httpx

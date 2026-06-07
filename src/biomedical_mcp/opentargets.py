@@ -194,8 +194,8 @@ class OpenTargets:
 
     def disease_associations(self, ensembl_id: str, limit: int = 25) -> dict:
         data = self._cached("assoc", DISEASE_ASSOCIATIONS_QUERY, {"id": ensembl_id, "size": min(limit, 100)})
-        target = data.get("target", {})
-        assoc = target.get("associatedDiseases", {})
+        target = data.get("target") or {}
+        assoc = target.get("associatedDiseases") or {}
         return {
             "target": target.get("approvedSymbol"),
             "total": assoc.get("count", 0),
@@ -212,8 +212,8 @@ class OpenTargets:
 
     def disease_targets(self, disease_id: str, limit: int = 25) -> dict:
         data = self._cached("dtargets", DISEASE_TARGETS_QUERY, {"id": disease_id, "size": min(limit, 100)})
-        disease = data.get("disease", {})
-        assoc = disease.get("associatedTargets", {})
+        disease = data.get("disease") or {}
+        assoc = disease.get("associatedTargets") or {}
         return {
             "disease": disease.get("name"),
             "disease_id": disease.get("id"),
@@ -231,8 +231,8 @@ class OpenTargets:
 
     def pharmacogenetics(self, ensembl_id: str, limit: int = 50) -> dict:
         data = self._cached("pgx", PHARMACOGENETICS_QUERY, {"id": ensembl_id})
-        target = data.get("target", {})
-        all_entries = target.get("pharmacogenomics", [])
+        target = data.get("target") or {}
+        all_entries = target.get("pharmacogenomics") or []
         entries = all_entries[:limit]
         return {
             "target": target.get("approvedSymbol"),
