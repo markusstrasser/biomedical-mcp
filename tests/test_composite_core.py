@@ -5,7 +5,7 @@ contract that all entity composites conform to.
 """
 
 from biomedical_mcp.composite_core import Section, run_sections, describe
-from biomedical_mcp import composite_sections as cs
+from biomedical_mcp.entities import gene as gene_entity
 
 
 # ── envelope + status logic ──────────────────────────────────────────────────
@@ -88,7 +88,7 @@ def test_unknown_section_is_not_applicable():
 # ── describe + registry ──────────────────────────────────────────────────────
 
 def test_describe_gene_lists_sections():
-    d = describe("gene", cs.SECTIONS["gene"])
+    d = describe("gene", gene_entity.SECTIONS)
     assert d["entity"] == "gene"
     names = {s["name"] for s in d["sections"]}
     assert "nomenclature" in names
@@ -129,11 +129,11 @@ def test_gene_fetchers_bind_to_clients_and_run():
         "gtex": FakeGTEx(), "hpo": FakeHPO(), "clingen": FakeClinGen(),
         "orphanet": FakeOrphanet(),
     }
-    fetchers = cs.gene_fetchers("BRCA1", clients)
-    env = run_sections("gene", "BRCA1", None, fetchers, cs.SECTIONS["gene"])
+    fetchers = gene_entity.fetchers("BRCA1", clients)
+    env = run_sections("gene", "BRCA1", None, fetchers, gene_entity.SECTIONS)
     assert env["overall_status"] == "ok"
     assert env["sections"]["nomenclature"]["data"]["symbol"] == "BRCA1"
     assert env["sections"]["constraint"]["data"]["pLI"] == 0.99
     assert env["sections"]["dosage_sensitivity"]["data"]["haploinsufficiency"] == 3
     # every default gene section ran
-    assert set(env["sections"]) == {s.name for s in cs.SECTIONS["gene"]}
+    assert set(env["sections"]) == {s.name for s in gene_entity.SECTIONS}

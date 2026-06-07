@@ -1,0 +1,21 @@
+"""Drug composite entity — STUB (filled in Phase 2). Conforms to entities/gene.py."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from biomedical_mcp.composite_core import Section, Fetcher
+
+ENTITY = "drug"
+TOOL_NAME = "drug_profile"
+DESCRIPTION = "Drug profile (stub). identifier = drug name (generic or brand)."
+NEEDS: tuple[str, ...] = ()
+SECTIONS: tuple[Section, ...] = ()
+
+
+def resolve(identifier: str, clients: dict[str, Any]) -> tuple[str, dict | None]:
+    return identifier, None
+
+
+def fetchers(identifier: str, clients: dict[str, Any], **opts: Any) -> dict[str, Fetcher]:
+    return {}
