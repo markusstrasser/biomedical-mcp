@@ -40,7 +40,15 @@ def create_server(cache: Cache) -> FastMCP:
         def composite_tool(identifier: str, sections: list[str] | None = None) -> dict:
             resolved, short_circuit = mod.resolve(identifier, clients)
             if short_circuit is not None:
-                return short_circuit
+                # Conform short-circuits (e.g. variant needs_search) to the standard
+                # envelope so downstream parsers never see a foreign shape.
+                return {
+                    "entity": mod.ENTITY,
+                    "id": identifier,
+                    "overall_status": short_circuit.get("status", "needs_input"),
+                    "sections": {},
+                    "short_circuit": short_circuit,
+                }
             fetch = mod.fetchers(resolved, clients)
             extra = {"input": identifier} if resolved != identifier else None
             return run_sections(mod.ENTITY, resolved, sections, fetch, mod.SECTIONS, extra=extra)

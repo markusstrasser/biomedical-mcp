@@ -152,27 +152,17 @@ def _parse_omim_code(identifier: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _is_curie(identifier: str) -> bool:
-    """True if identifier is a structured CURIE (MONDO/OMIM/ORPHA/EFO)."""
-    return bool(
-        _ORPHA_RE.match(identifier)
-        or _MONDO_RE.match(identifier)
-        or _OMIM_RE.match(identifier)
-        or _EFO_RE.match(identifier)
-    )
-
-
 def _opentargets_id(identifier: str) -> str | None:
     """Derive an OT-compatible disease id from a structured identifier.
 
     Returns:
-        - MONDO/EFO as-is (OT accepts these natively).
+        - MONDO:X / EFO:X as "MONDO_X" / "EFO_X" (OT uses underscore CURIEs).
         - OMIM:XXXXXX as "OMIM_XXXXXX" (OT EFO convention).
         - ORPHA:123   as "Orphanet_123" (OT EFO convention).
         - Plain name  → None (caller must use OT search).
     """
     if _MONDO_RE.match(identifier) or _EFO_RE.match(identifier):
-        return identifier
+        return identifier.replace(":", "_")
     m_omim = _OMIM_RE.match(identifier)
     if m_omim:
         return f"OMIM_{m_omim.group(1)}"
@@ -191,19 +181,6 @@ def _monarch_id(identifier: str) -> str | None:
     if _ORPHA_RE.match(identifier):
         return identifier
     return None
-
-
-def _search_name_for_display(identifier: str) -> str:
-    """Extract a human-readable name from any identifier form for ICD-10/search.
-
-    For CURIEs, strip the prefix for a better search term. For plain names, use as-is.
-    """
-    for prefix in ("ORPHA:", "MONDO:", "OMIM:", "EFO:"):
-        if identifier.upper().startswith(prefix):
-            # Return the bare code — ICD-10 search works better with a disease name,
-            # so callers should prefer the identifier as-is for CURIE inputs.
-            return identifier
-    return identifier
 
 
 # ── resolve ──────────────────────────────────────────────────────────────────

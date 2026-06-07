@@ -16,12 +16,14 @@ Design notes (decision: agent-infra/decisions/2026-06-07-biomedical-mcp-tool-con
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+from concurrent.futures import ThreadPoolExecutor, wait as _futures_wait
 from dataclasses import dataclass
 from typing import Any, Callable
 
 # Shared thread pool — clients use sync httpx, so sections run on threads.
-_executor = ThreadPoolExecutor(max_workers=8)
+# Sized above the largest single composite's section count (gene = 9) so one
+# dossier never queues against itself.
+_executor = ThreadPoolExecutor(max_workers=16)
 
 # Per-section deadline. A slow/down API yields a timeout SectionResult instead
 # of blocking the whole composite. Pattern inherited from the prior composite.py.
@@ -122,19 +124,26 @@ def run_sections(
             runnable.append(n)
 
     futures = {n: _executor.submit(fetchers[n]) for n in runnable}
+    # ONE global wait so `timeout` is the budget for the whole batch, not per
+    # section (a loop of per-future .result(timeout=) makes timeouts additive —
+    # 3 hung sections would block 3×timeout).
+    _futures_wait(set(futures.values()), timeout=timeout)
     for n in runnable:
+        fut = futures[n]
         meta = meta_by_name[n]
         prov = {"sources": list(meta.sources), "evidence_grade": meta.evidence_grade}
-        try:
-            data = futures[n].result(timeout=timeout)
-            status = "ok" if _has_data(data) else "empty"
-            sections_out[n] = {"status": status, "data": data, "provenance": prov}
-        except FuturesTimeout:
+        if not fut.done():
+            fut.cancel()  # best-effort; a thread mid-HTTP keeps running until its own client timeout
             sections_out[n] = {
                 "status": "error", "data": None, "provenance": prov,
                 "error": {"type": "timeout", "retryable": True,
-                          "message": f"{n} timed out after {timeout}s"},
+                          "message": f"{n} did not complete within {timeout}s"},
             }
+            continue
+        try:
+            data = fut.result()
+            status = "ok" if _has_data(data) else "empty"
+            sections_out[n] = {"status": status, "data": data, "provenance": prov}
         except Exception as exc:  # noqa: BLE001 — surface any upstream failure per-section
             sections_out[n] = {
                 "status": "error", "data": None, "provenance": prov,

@@ -162,7 +162,11 @@ class DDInter(BaseClient):
 
         results = []
         for row in data.get("data", [])[:limit]:
-            level_int = int(row.get("level", 0))
+            # `level` from the undocumented DataTables endpoint may be null/""/non-int.
+            try:
+                level_int = int(row.get("level") or 0)
+            except (TypeError, ValueError):
+                level_int = 0
             results.append(
                 {
                     "interacting_drug": row.get("drug_name", ""),

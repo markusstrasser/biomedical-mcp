@@ -370,3 +370,15 @@ def test_orphanet_sections_have_evidence_grade():
     assert orphanet_sections, "Expected at least one orphanet section"
     for s in orphanet_sections:
         assert s.evidence_grade == "B2", f"{s.name} should have B2 evidence grade"
+
+
+# ── caught-red-handed (close review) ─────────────────────────────────────────
+
+def test_opentargets_id_normalizes_mondo_efo_to_underscore():
+    """OpenTargets uses underscore CURIEs; colon form must be converted."""
+    from biomedical_mcp.entities.disease import _opentargets_id
+    assert _opentargets_id("MONDO:0009861") == "MONDO_0009861"
+    assert _opentargets_id("EFO:0000270") == "EFO_0000270"
+    assert _opentargets_id("OMIM:219700") == "OMIM_219700"
+    assert _opentargets_id("ORPHA:586") == "Orphanet_586"
+    assert _opentargets_id("cystic fibrosis") is None

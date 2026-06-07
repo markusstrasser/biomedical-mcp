@@ -4,8 +4,31 @@ No network: fetchers are plain callables / fake clients. Proves the consolidatio
 contract that all entity composites conform to.
 """
 
+import threading
+import time
+
 from biomedical_mcp.composite_core import Section, run_sections, describe
 from biomedical_mcp.entities import gene as gene_entity
+
+
+def test_section_timeout_is_global_not_additive():
+    """Regression: a loop of per-future .result(timeout=) made timeouts additive
+    (N hung sections → N×timeout). The global wait() must bound the whole batch."""
+    release = threading.Event()
+    meta3 = (Section("a", ("s",), True, ""),
+             Section("b", ("s",), True, ""),
+             Section("c", ("s",), True, ""))
+    fetchers = {n: (lambda: release.wait(10)) for n in ("a", "b", "c")}
+    t0 = time.monotonic()
+    env = run_sections("x", "id", None, fetchers, meta3, timeout=0.3)
+    elapsed = time.monotonic() - t0
+    release.set()
+    for n in ("a", "b", "c"):
+        assert env["sections"][n]["status"] == "error"
+        assert env["sections"][n]["error"]["type"] == "timeout"
+    assert env["overall_status"] == "error"
+    # Pre-fix this was ~0.9s (3×0.3 additive); global budget keeps it near 0.3s.
+    assert elapsed < 0.6, f"timeout was additive: {elapsed:.2f}s"
 
 
 # ── envelope + status logic ──────────────────────────────────────────────────

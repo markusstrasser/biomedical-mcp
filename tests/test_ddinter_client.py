@@ -276,3 +276,25 @@ class TestValidate:
 
         monkeypatch.setattr(client, "_post_datatable", raise_exc)
         assert client.validate() is False
+
+
+# ── caught-red-handed (close review) ─────────────────────────────────────────
+
+def test_interactions_handles_null_or_empty_level(tmp_path):
+    """A null/empty `level` from the undocumented endpoint must not crash parsing."""
+    from biomedical_mcp.cache import Cache
+    from biomedical_mcp.ddinter import DDInter
+    c = DDInter(Cache(tmp_path / "c.db"))
+    c._resolve_drug_id = lambda name: "DDInter1"  # type: ignore
+    c._post_datatable = lambda path, length=500: {  # type: ignore
+        "data": [
+            {"drug_name": "warfarin", "level": None},
+            {"drug_name": "aspirin", "level": ""},
+            {"drug_name": "ibuprofen", "level": 3},
+        ]
+    }
+    rows = c.interactions("testdrug")
+    sev = {r["interacting_drug"]: r["severity"] for r in rows}
+    assert sev["warfarin"] == "Unknown"
+    assert sev["aspirin"] == "Unknown"
+    assert sev["ibuprofen"] == "Major"
