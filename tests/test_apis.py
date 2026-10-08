@@ -56,6 +56,20 @@ class TestOpenTargets:
         assert info is not None
         assert info["name"].lower() == "aspirin"
 
+    def test_all_queries_validate(self, cache):
+        """Post every *_QUERY with sample variables; schema drift shows up as GraphQL errors."""
+        from biomedical_mcp import opentargets as mod
+
+        samples = {"id": "ENSG00000012048", "q": "BRCA1", "size": 1, "entities": ["target"]}
+        overrides = {"DISEASE_TARGETS_QUERY": {"id": "EFO_0000305"}, "DRUG_INFO_QUERY": {"id": "CHEMBL25"}}
+        ot = OpenTargets(cache)
+        names = [n for n in dir(mod) if n.endswith("_QUERY")]
+        assert names
+        for name in names:
+            variables = {**samples, **overrides.get(name, {})}
+            resp = ot.client.post(mod.OT_URL, json={"query": getattr(mod, name), "variables": variables})
+            assert "errors" not in resp.json(), f"{name}: {resp.json().get('errors')}"
+
 
 # ── ChEMBL ────────────────────────────────────────────────────
 

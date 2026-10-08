@@ -33,13 +33,12 @@ query($id: String!) {
     functionDescriptions
     tractability { label modality value }
     safetyLiabilities { event datasource }
-    knownDrugs(size: 10) {
+    knownDrugs: drugAndClinicalCandidates {
       count
       rows {
-        drug { id name drugType maximumClinicalTrialPhase }
-        disease { id name }
-        phase
-        status
+        drug { id name drugType maximumClinicalTrialPhase: maximumClinicalStage }
+        diseases { disease { id name } }
+        phase: maxClinicalStage
       }
     }
   }
@@ -106,10 +105,10 @@ query($id: String!) {
     id
     name
     drugType
-    maximumClinicalTrialPhase
-    hasBeenWithdrawn
+    maximumClinicalTrialPhase: maximumClinicalStage
+    drugWarnings { warningType }
     description
-    synonyms
+    synonyms { label }
     mechanismsOfAction {
       rows {
         mechanismOfAction
@@ -120,11 +119,9 @@ query($id: String!) {
       count
       rows {
         disease { id name }
-        maxPhaseForIndication
+        maxPhaseForIndication: maxClinicalStage
       }
     }
-    linkedDiseases { count }
-    linkedTargets { count }
   }
 }
 """
@@ -189,8 +186,19 @@ class OpenTargets:
         return search_data.get("hits", [])
 
     def target_info(self, ensembl_id: str) -> dict:
+        """Target details with up to 10 known drugs.
+
+        knownDrugs now comes from drugAndClinicalCandidates: one row per drug with a
+        `diseases` list (was one row per drug-disease pair with `disease`), and
+        `phase`/`maximumClinicalTrialPhase` are clinical-stage strings (e.g. "APPROVAL").
+        The per-row trial `status` has no equivalent and is dropped.
+        """
         data = self._cached("target", TARGET_INFO_QUERY, {"id": ensembl_id})
-        return data.get("target")
+        target = data.get("target")
+        known = (target or {}).get("knownDrugs")
+        if known:
+            known["rows"] = known["rows"][:10]
+        return target
 
     def disease_associations(self, ensembl_id: str, limit: int = 25) -> dict:
         data = self._cached("assoc", DISEASE_ASSOCIATIONS_QUERY, {"id": ensembl_id, "size": min(limit, 100)})
@@ -242,5 +250,17 @@ class OpenTargets:
         }
 
     def drug_info(self, chembl_id: str) -> dict:
+        """Drug details from Open Targets.
+
+        `maximumClinicalTrialPhase` and indication `maxPhaseForIndication` are now
+        clinical-stage strings (e.g. "APPROVAL"); `hasBeenWithdrawn` is derived from a
+        "Withdrawn" drug warning; `synonyms` are flattened to labels.
+        `linkedDiseases` and `linkedTargets` have no equivalent and are dropped.
+        """
         data = self._cached("drug", DRUG_INFO_QUERY, {"id": chembl_id})
-        return data.get("drug")
+        drug = data.get("drug")
+        if drug:
+            warnings = drug.pop("drugWarnings", None) or []
+            drug["hasBeenWithdrawn"] = any(w.get("warningType") == "Withdrawn" for w in warnings)
+            drug["synonyms"] = sorted({s["label"] for s in drug.get("synonyms") or []})
+        return drug
