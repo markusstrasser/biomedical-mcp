@@ -145,6 +145,98 @@ class TestGWASCatalog:
         gc = GWASCatalog(cache)
         assert gc.validate() is True
 
+    def test_variant_associations(self, cache):
+        gc = GWASCatalog(cache)
+        result = gc.variant_associations("rs7903146", limit=5)
+        assert result["association_count"] > 0
+        assert result["associations"][0]["study"].startswith("GCST")
+
+    def test_gene_associations(self, cache):
+        gc = GWASCatalog(cache)
+        result = gc.gene_associations("FTO", limit=3)
+        assert result["association_count"] > 0
+        assert "FTO" in result["associations"][0]["genes"]
+
+
+V2_ASSOC_PAGE = {
+    "_embedded": {"associations": [{
+        "association_id": 226328771, "pvalue_mantissa": 1, "pvalue_exponent": -14,
+        "or_value": "1.12", "beta": "-", "accession_id": "GCST90476468",
+        "pubmed_id": "39024449", "mapped_genes": ["FTO"],
+        "snp_effect_allele": ["rs1421085-T"],
+        "efo_traits": [{"efo_id": "EFO_0004338", "efo_trait": "body weight"}],
+    }]},
+    "page": {"size": 1, "totalElements": 1, "totalPages": 1, "number": 0},
+}
+V2_TRAIT_PAGE = {"_embedded": {"efo_traits": [{
+    "efo_trait": "asthma", "efo_id": "MONDO_0004979",
+    "uri": "http://purl.obolibrary.org/obo/MONDO_0004979",
+}]}}
+
+
+class TestGWASCatalogV2Shapes:
+    """Offline: v2 response shapes map onto the stable output keys."""
+
+    def _patch(self, monkeypatch, gc, pub_date="2024-07-19"):
+        calls = []
+
+        def fake_get(path, params=None, headers=None):
+            calls.append((path, params))
+            if path == "/associations":
+                return V2_ASSOC_PAGE
+            if path == "/efo-traits":
+                return V2_TRAIT_PAGE
+            if path.startswith("/publications/"):
+                return {"pubmed_id": "39024449", "publication_date": pub_date}
+            raise AssertionError(path)
+
+        monkeypatch.setattr(gc, "_get", fake_get)
+        return calls
+
+    def test_variant_associations(self, cache, monkeypatch):
+        gc = GWASCatalog(cache)
+        calls = self._patch(monkeypatch, gc)
+        result = gc.variant_associations("rs1421085", limit=5)
+        assert calls[0] == ("/associations", {"rs_id": "rs1421085", "size": 5})
+        a = result["associations"][0]
+        assert a == {
+            "pvalue": 1, "pvalue_exponent": -14, "risk_allele": "rs1421085-T",
+            "or_beta": "1.12", "genes": ["FTO"], "trait": "body weight",
+            "traits": ["body weight"], "study": "GCST90476468", "pubmed_id": "39024449",
+        }
+
+    def test_gene_associations(self, cache, monkeypatch):
+        gc = GWASCatalog(cache)
+        calls = self._patch(monkeypatch, gc)
+        result = gc.gene_associations("FTO", limit=5)
+        assert calls[0][1]["mapped_gene"] == "FTO"
+        assert result["association_count"] == 1
+
+    def test_empty_page_is_not_found(self, cache, monkeypatch):
+        gc = GWASCatalog(cache)
+        monkeypatch.setattr(gc, "_get", lambda path, params=None, headers=None: {"page": {"totalElements": 0}})
+        result = gc.variant_associations("rs0", limit=5)
+        assert result["association_count"] == 0 and "not found" in result["note"]
+
+    def test_trait_search(self, cache, monkeypatch):
+        gc = GWASCatalog(cache)
+        self._patch(monkeypatch, gc)
+        result = gc.trait_search("asthma", limit=5)
+        assert result["traits"] == [{"trait": "asthma", "short_form": "MONDO_0004979",
+                                     "uri": "http://purl.obolibrary.org/obo/MONDO_0004979"}]
+
+    def test_new_for_variants_date_filter(self, cache, monkeypatch):
+        gc = GWASCatalog(cache)
+        self._patch(monkeypatch, gc, pub_date="2024-07-19")
+        kept = gc.new_for_variants(["rs1421085"], since_date="2024-01-01")
+        assert kept["variants"]["rs1421085"]["associations"][0]["publication_date"] == "2024-07-19"
+
+    def test_new_for_variants_drops_older(self, cache, monkeypatch):
+        gc = GWASCatalog(cache)
+        self._patch(monkeypatch, gc, pub_date="2020-01-01")
+        dropped = gc.new_for_variants(["rs1421085"], since_date="2024-01-01")
+        assert dropped["variants"]["rs1421085"]["association_count"] == 0
+
 
 # ── LitVar2 ──────────────────────────────────────────────────
 

@@ -17,22 +17,18 @@ class GWASCatalog(BaseClient):
         super().__init__(cache)
 
     def variant_associations(self, rsid: str, limit: int = 25) -> dict:
-        """GWAS associations for a variant (rsID)."""
-        key = self._cache_key("var_assoc", rsid)
+        """GWAS associations for a variant (rsID), via v2 ``/associations?rs_id=``.
+
+        An unknown rsID returns an empty page in v2 (no 404).
+        """
+        key = self._cache_key("var_assoc_v2", rsid)
         cached = self.cache.get(key, max_age_days=self.ttl_days)
         if cached is not None:
             return {**cached, "_cache_hit": True}
 
         try:
-            data = self._get(
-                f"/singleNucleotidePolymorphisms/{rsid}/associations",
-                params={"projection": "associationBySnp"},
-            )
+            data = self._get("/associations", params={"rs_id": rsid, "size": min(limit, 200)})
         except Exception as exc:
-            import httpx as _httpx
-            if isinstance(exc, _httpx.HTTPStatusError) and exc.response.status_code == 404:
-                return {"rsid": rsid, "association_count": 0, "associations": [],
-                        "note": "Variant not found in GWAS Catalog"}
             log.warning("GWAS Catalog API error for %s: %s", rsid, exc)
             return {"rsid": rsid, "association_count": 0, "associations": [],
                     "error": "api_error", "note": f"GWAS Catalog API error: {type(exc).__name__}"}
@@ -42,48 +38,62 @@ class GWASCatalog(BaseClient):
             "association_count": len(associations),
             "associations": associations,
         }
+        if not associations:
+            result["note"] = "Variant not found in GWAS Catalog"
         self.cache.set(key, result)
         return result
 
     def gene_associations(self, gene_symbol: str, limit: int = 25) -> dict:
-        """GWAS associations for a gene."""
-        key = self._cache_key("gene_assoc", gene_symbol)
+        """GWAS associations for a gene, via v2 ``/associations?mapped_gene=``.
+
+        v2 filters on Ensembl-mapped genes; v1 used author-reported genes.
+        """
+        key = self._cache_key("gene_assoc_v2", gene_symbol)
         cached = self.cache.get(key, max_age_days=self.ttl_days)
         if cached is not None:
             return {**cached, "_cache_hit": True}
 
         try:
-            data = self._get(f"/genes/{gene_symbol}/associations")
-        except Exception:
+            data = self._get("/associations",
+                             params={"mapped_gene": gene_symbol, "size": min(limit, 200)})
+        except Exception as exc:
+            log.warning("GWAS Catalog API error for %s: %s", gene_symbol, exc)
             return {"gene_symbol": gene_symbol, "association_count": 0, "associations": [],
-                    "note": "No GWAS associations found (gene may not be in GWAS Catalog)"}
+                    "error": "api_error", "note": f"GWAS Catalog API error: {type(exc).__name__}"}
         associations = self._extract_associations(data, limit)
         result = {
             "gene_symbol": gene_symbol,
             "association_count": len(associations),
             "associations": associations,
         }
+        if not associations:
+            result["note"] = "No GWAS associations found (gene may not be in GWAS Catalog)"
         self.cache.set(key, result)
         return result
 
     def trait_search(self, query: str, limit: int = 10) -> dict:
-        """Search EFO traits by keyword."""
+        """Search EFO traits by keyword (v2 ``/efo-traits?efo_trait=``, substring match)."""
         data, _ = self._cached_get(
-            "trait_search",
-            "/efoTraits",
-            params={"search": query, "size": min(limit, 50)},
+            "trait_search_v2",
+            "/efo-traits",
+            params={"efo_trait": query, "size": min(limit, 50)},
         )
         traits = []
-        for item in (data.get("_embedded", {}).get("efoTraits", []) if isinstance(data, dict) else []):
+        for item in (data.get("_embedded", {}).get("efo_traits", []) if isinstance(data, dict) else []):
             traits.append({
-                "trait": item.get("trait"),
-                "short_form": item.get("shortForm"),
+                "trait": item.get("efo_trait"),
+                "short_form": item.get("efo_id"),
                 "uri": item.get("uri"),
             })
         return {"query": query, "count": len(traits), "traits": traits[:limit]}
 
     def _extract_associations(self, data: dict | list, limit: int) -> list[dict]:
-        """Extract associations from GWAS Catalog response."""
+        """Extract associations from a v2 ``/associations`` page.
+
+        ``genes`` are v2 ``mapped_genes`` (v1 returned author-reported genes, which
+        the v2 list view does not carry). ``or_beta`` is ``or_value`` (v1
+        ``orPerCopyNum``); beta-only associations give None, as in v1.
+        """
         raw = []
         if isinstance(data, dict):
             raw = data.get("_embedded", {}).get("associations", [])
@@ -92,37 +102,21 @@ class GWASCatalog(BaseClient):
 
         associations = []
         for assoc in raw[:limit]:
-            strongest = assoc.get("strongestRiskAlleles", [{}])
-            risk_allele = strongest[0].get("riskAlleleName") if strongest else None
-            loci = assoc.get("loci", [{}])
-            genes = []
-            for locus in loci:
-                for gene_entry in locus.get("authorReportedGenes", []):
-                    genes.append(gene_entry.get("geneName"))
-
-            # Traits from efoTraits array (HAL response format)
-            efo_traits = assoc.get("efoTraits", [])
-            trait_names = [t.get("trait") for t in efo_traits if t.get("trait")]
-
-            # Study accession from _links (not available as top-level dict in projection)
-            study_accession = None
-            study_obj = assoc.get("study")
-            if isinstance(study_obj, dict):
-                study_accession = study_obj.get("accessionId")
-            elif isinstance(assoc.get("_links", {}), dict):
-                study_href = assoc.get("_links", {}).get("study", {}).get("href", "")
-                if "/studies/" in study_href:
-                    study_accession = study_href.rsplit("/studies/", 1)[-1]
-
+            alleles = assoc.get("snp_effect_allele") or []
+            trait_names = [t.get("efo_trait") for t in assoc.get("efo_traits", []) if t.get("efo_trait")]
+            or_beta = assoc.get("or_value")
+            if or_beta is None:
+                or_beta = assoc.get("or_per_copy_num")
             associations.append({
-                "pvalue": assoc.get("pvalueMantissa"),
-                "pvalue_exponent": assoc.get("pvalueExponent"),
-                "risk_allele": risk_allele,
-                "or_beta": assoc.get("orPerCopyNum"),
-                "genes": genes,
+                "pvalue": assoc.get("pvalue_mantissa"),
+                "pvalue_exponent": assoc.get("pvalue_exponent"),
+                "risk_allele": alleles[0] if alleles else None,
+                "or_beta": or_beta,
+                "genes": list(assoc.get("mapped_genes") or []),
                 "trait": ", ".join(trait_names) if trait_names else None,
                 "traits": trait_names,
-                "study": study_accession,
+                "study": assoc.get("accession_id"),
+                "pubmed_id": assoc.get("pubmed_id"),
             })
         return associations
 
@@ -146,17 +140,16 @@ class GWASCatalog(BaseClient):
                 # Filter by study date if available in the association data
                 filtered = []
                 for a in associations:
-                    study_acc = a.get("study")
-                    # GWAS Catalog associations don't embed dates directly,
-                    # so we fetch study metadata when a date filter is needed
-                    if study_acc and since_date:
+                    pmid = a.get("pubmed_id")
+                    # v2 studies carry no date; the publication record does
+                    if pmid and since_date:
                         try:
-                            study_data, _ = self._cached_get(
-                                "study_detail", f"/studies/{study_acc}",
+                            pub_data, _ = self._cached_get(
+                                "publication_detail", f"/publications/{pmid}",
                             )
                             pub_date = ""
-                            if isinstance(study_data, dict):
-                                pub_date = study_data.get("publicationDate", "")
+                            if isinstance(pub_data, dict):
+                                pub_date = pub_data.get("publication_date") or ""
                             if pub_date >= since_date:
                                 a["publication_date"] = pub_date
                                 filtered.append(a)

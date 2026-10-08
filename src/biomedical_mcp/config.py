@@ -31,7 +31,7 @@ DOMAINS: dict[str, dict] = {
     # New Tier 2 APIs
     "gtex":            {"base_url": "https://gtexportal.org/api/v2",                    "ttl_days": TTL_CURATED,  "rate_limit": 3.0},
     "hgnc":            {"base_url": "https://rest.genenames.org",                       "ttl_days": TTL_STABLE,   "rate_limit": 5.0},
-    "gwas_catalog":    {"base_url": "https://www.ebi.ac.uk/gwas/rest/api",              "ttl_days": TTL_CURATED,  "rate_limit": 1.0},
+    "gwas_catalog":    {"base_url": "https://www.ebi.ac.uk/gwas/rest/api/v2",            "ttl_days": TTL_CURATED,  "rate_limit": 1.0},
     # New Tier 3 APIs
     "litvar":          {"base_url": "https://www.ncbi.nlm.nih.gov/research/litvar2-api", "ttl_days": TTL_VOLATILE, "rate_limit": 3.0},
     "interpro":        {"base_url": "https://www.ebi.ac.uk/interpro/api",               "ttl_days": TTL_STABLE,   "rate_limit": 3.0},
