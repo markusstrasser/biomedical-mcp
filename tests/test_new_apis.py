@@ -148,8 +148,8 @@ class TestGWASCatalog:
     def test_variant_associations(self, cache):
         gc = GWASCatalog(cache)
         result = gc.variant_associations("rs7903146", limit=5)
-        assert result["association_count"] > 0
-        assert result["associations"][0]["study"].startswith("GCST")
+        assert result["association_count"] > len(result["associations"]) == 5
+        assert result["associations"][0]["pvalue_exponent"] < -100
 
     def test_gene_associations(self, cache):
         gc = GWASCatalog(cache)
@@ -197,7 +197,8 @@ class TestGWASCatalogV2Shapes:
         gc = GWASCatalog(cache)
         calls = self._patch(monkeypatch, gc)
         result = gc.variant_associations("rs1421085", limit=5)
-        assert calls[0] == ("/associations", {"rs_id": "rs1421085", "size": 5})
+        assert calls[0] == ("/associations", {"rs_id": "rs1421085", "size": 5,
+                                              "sort": "p_value", "direction": "asc"})
         a = result["associations"][0]
         assert a == {
             "pvalue": 1, "pvalue_exponent": -14, "risk_allele": "rs1421085-T",
@@ -217,6 +218,29 @@ class TestGWASCatalogV2Shapes:
         monkeypatch.setattr(gc, "_get", lambda path, params=None, headers=None: {"page": {"totalElements": 0}})
         result = gc.variant_associations("rs0", limit=5)
         assert result["association_count"] == 0 and "not found" in result["note"]
+
+    def test_count_is_total_not_page(self, cache, monkeypatch):
+        gc = GWASCatalog(cache)
+        page = {**V2_ASSOC_PAGE, "page": {"size": 1, "totalElements": 353, "totalPages": 353, "number": 0}}
+        monkeypatch.setattr(gc, "_get", lambda path, params=None, headers=None: page)
+        result = gc.variant_associations("rs7903146", limit=1)
+        assert result["association_count"] == 353
+        assert len(result["associations"]) == 1
+
+    def test_server_order_preserved(self, cache, monkeypatch):
+        gc = GWASCatalog(cache)
+        rows = [{**V2_ASSOC_PAGE["_embedded"]["associations"][0], "pvalue_mantissa": m, "pvalue_exponent": e}
+                for m, e in ((3, -1315), (3, -695), (1, -8))]
+        seen = {}
+
+        def fake_get(path, params=None, headers=None):
+            seen.update(params)
+            return {"_embedded": {"associations": rows}, "page": {"totalElements": 3}}
+
+        monkeypatch.setattr(gc, "_get", fake_get)
+        result = gc.gene_associations("TCF7L2", limit=3)
+        assert (seen["sort"], seen["direction"]) == ("p_value", "asc")
+        assert [a["pvalue_exponent"] for a in result["associations"]] == [-1315, -695, -8]
 
     def test_trait_search(self, cache, monkeypatch):
         gc = GWASCatalog(cache)

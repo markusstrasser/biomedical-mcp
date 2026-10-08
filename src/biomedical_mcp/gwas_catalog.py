@@ -19,6 +19,8 @@ class GWASCatalog(BaseClient):
     def variant_associations(self, rsid: str, limit: int = 25) -> dict:
         """GWAS associations for a variant (rsID), via v2 ``/associations?rs_id=``.
 
+        Rows come strongest first (server-side ``sort=p_value&direction=asc``);
+        ``association_count`` is the total match count, the list is capped at ``limit``.
         An unknown rsID returns an empty page in v2 (no 404).
         """
         key = self._cache_key("var_assoc_v2", rsid)
@@ -27,7 +29,8 @@ class GWASCatalog(BaseClient):
             return {**cached, "_cache_hit": True}
 
         try:
-            data = self._get("/associations", params={"rs_id": rsid, "size": min(limit, 200)})
+            data = self._get("/associations", params={"rs_id": rsid, "size": min(limit, 200),
+                                     "sort": "p_value", "direction": "asc"})
         except Exception as exc:
             log.warning("GWAS Catalog API error for %s: %s", rsid, exc)
             return {"rsid": rsid, "association_count": 0, "associations": [],
@@ -35,7 +38,7 @@ class GWASCatalog(BaseClient):
         associations = self._extract_associations(data, limit)
         result = {
             "rsid": rsid,
-            "association_count": len(associations),
+            "association_count": self._total(data, associations),
             "associations": associations,
         }
         if not associations:
@@ -46,7 +49,8 @@ class GWASCatalog(BaseClient):
     def gene_associations(self, gene_symbol: str, limit: int = 25) -> dict:
         """GWAS associations for a gene, via v2 ``/associations?mapped_gene=``.
 
-        v2 filters on Ensembl-mapped genes; v1 used author-reported genes.
+        v2 filters on Ensembl-mapped genes; v1 used author-reported genes. Strongest
+        first; ``association_count`` is the total, the list is capped at ``limit``.
         """
         key = self._cache_key("gene_assoc_v2", gene_symbol)
         cached = self.cache.get(key, max_age_days=self.ttl_days)
@@ -55,7 +59,8 @@ class GWASCatalog(BaseClient):
 
         try:
             data = self._get("/associations",
-                             params={"mapped_gene": gene_symbol, "size": min(limit, 200)})
+                             params={"mapped_gene": gene_symbol, "size": min(limit, 200),
+                                     "sort": "p_value", "direction": "asc"})
         except Exception as exc:
             log.warning("GWAS Catalog API error for %s: %s", gene_symbol, exc)
             return {"gene_symbol": gene_symbol, "association_count": 0, "associations": [],
@@ -63,7 +68,7 @@ class GWASCatalog(BaseClient):
         associations = self._extract_associations(data, limit)
         result = {
             "gene_symbol": gene_symbol,
-            "association_count": len(associations),
+            "association_count": self._total(data, associations),
             "associations": associations,
         }
         if not associations:
@@ -86,6 +91,15 @@ class GWASCatalog(BaseClient):
                 "uri": item.get("uri"),
             })
         return {"query": query, "count": len(traits), "traits": traits[:limit]}
+
+    @staticmethod
+    def _total(data: dict | list, associations: list) -> int:
+        """All matching associations (v2 ``page.totalElements``), not just the returned page."""
+        if isinstance(data, dict):
+            total = (data.get("page") or {}).get("totalElements")
+            if isinstance(total, int):
+                return total
+        return len(associations)
 
     def _extract_associations(self, data: dict | list, limit: int) -> list[dict]:
         """Extract associations from a v2 ``/associations`` page.
