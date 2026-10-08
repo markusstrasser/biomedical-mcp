@@ -23,7 +23,8 @@ class PharmVar(BaseClient):
         super().__init__(cache, base_url=PHARMVAR_BASE)
         api_key = os.environ.get("PHARMVAR_API_KEY", "")
         if api_key:
-            self.client.headers["Authorization"] = api_key
+            # PharmVar reads the key from `API-Key`; `Authorization` returns 401.
+            self.client.headers["API-Key"] = api_key
         else:
             log.warning("PHARMVAR_API_KEY not set — PharmVar tools will return auth errors")
 
