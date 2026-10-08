@@ -74,6 +74,16 @@ class TestOpenTargets:
         assert known["rows"][1]["diseases"] == [{"disease": {"id": "D1", "name": "x"}}]
         assert all(d["disease"] for r in known["rows"] for d in r["diseases"])
 
+    def test_target_known_drugs_keeps_all_approved(self, cache, monkeypatch):
+        rows = [{"drug": {"name": f"A{i:02d}"}, "phase": "APPROVAL", "diseases": []} for i in range(12)]
+        rows += [{"drug": {"name": "TRIAL"}, "phase": "PHASE_3", "diseases": []}]
+        fake = {"target": {"knownDrugs": {"count": 13, "rows": rows}}}
+        ot = OpenTargets(cache)
+        monkeypatch.setattr(ot, "_cached", lambda *a, **k: fake)
+        known = ot.target_info("ENSG0")["knownDrugs"]
+        assert len(known["rows"]) == 12
+        assert all(r["phase"] == "APPROVAL" for r in known["rows"])
+
     def test_all_queries_validate(self, cache):
         """Post every *_QUERY with sample variables; schema drift shows up as GraphQL errors."""
         from biomedical_mcp import opentargets as mod

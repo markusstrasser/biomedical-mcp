@@ -196,7 +196,9 @@ class OpenTargets:
         return search_data.get("hits", [])
 
     def target_info(self, ensembl_id: str) -> dict:
-        """Target details with up to 10 known drugs, most advanced stage first (count is the full total).
+        """Target details with known drugs, most advanced stage first (count is the full total).
+
+        Keeps every APPROVAL row, then fills with the next stages up to 10 rows in total.
 
         knownDrugs now comes from drugAndClinicalCandidates: one row per drug with a
         `diseases` list (was one row per drug-disease pair with `disease`), and
@@ -209,7 +211,9 @@ class OpenTargets:
         if known:
             for row in known["rows"]:
                 row["diseases"] = [d for d in row.get("diseases") or [] if d.get("disease")]
-            known["rows"] = sorted(known["rows"], key=_stage_sort_key)[:10]
+            ranked = sorted(known["rows"], key=_stage_sort_key)
+            approved = sum(1 for r in ranked if r.get("phase") == "APPROVAL")
+            known["rows"] = ranked[: max(10, approved)]
         return target
 
     def disease_associations(self, ensembl_id: str, limit: int = 25) -> dict:
