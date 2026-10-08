@@ -119,6 +119,9 @@ def create_server(cache: Cache) -> FastMCP:
     def star_alleles(gene: str, limit: int = 50) -> dict:
         """Get star allele definitions from PharmVar for a PGx gene.
 
+        Core alleles first in star order, then suballeles; allele_count and
+        core_count cover the whole gene. First call per gene takes ~20 s
+        (PharmVar's server time), then it is cached.
         Requires PHARMVAR_API_KEY env var (free at pharmvar.org).
 
         Args:
