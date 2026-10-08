@@ -56,6 +56,24 @@ class TestOpenTargets:
         assert info is not None
         assert info["name"].lower() == "aspirin"
 
+    def test_target_known_drugs_sorted_and_null_diseases_dropped(self, cache, monkeypatch):
+        rows = [
+            {"drug": {"name": "ZED"}, "phase": "PHASE_1", "diseases": [{"disease": None}]},
+            {"drug": {"name": "BETA"}, "phase": "APPROVAL", "diseases": [{"disease": {"id": "D1", "name": "x"}}, {"disease": None}]},
+            {"drug": {"name": "ALPHA"}, "phase": "APPROVAL", "diseases": []},
+            {"drug": {"name": "MID"}, "phase": "PHASE_3", "diseases": []},
+            {"drug": {"name": "ODD"}, "phase": "SOMETHING_NEW", "diseases": []},
+        ] + [{"drug": {"name": f"P2_{i}"}, "phase": "PHASE_2", "diseases": []} for i in range(8)]
+        fake = {"target": {"approvedSymbol": "X", "knownDrugs": {"count": 99, "rows": rows}}}
+        ot = OpenTargets(cache)
+        monkeypatch.setattr(ot, "_cached", lambda *a, **k: fake)
+        known = ot.target_info("ENSG0")["knownDrugs"]
+        assert known["count"] == 99
+        assert [r["drug"]["name"] for r in known["rows"][:3]] == ["ALPHA", "BETA", "MID"]
+        assert len(known["rows"]) == 10 and "ODD" not in [r["drug"]["name"] for r in known["rows"]]
+        assert known["rows"][1]["diseases"] == [{"disease": {"id": "D1", "name": "x"}}]
+        assert all(d["disease"] for r in known["rows"] for d in r["diseases"])
+
     def test_all_queries_validate(self, cache):
         """Post every *_QUERY with sample variables; schema drift shows up as GraphQL errors."""
         from biomedical_mcp import opentargets as mod

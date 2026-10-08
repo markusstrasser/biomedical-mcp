@@ -127,6 +127,16 @@ query($id: String!) {
 """
 
 
+# Live maxClinicalStage values (2026-10-08) are strings, most advanced first; unlisted values sort last.
+STAGE_ORDER = ["APPROVAL", "PHASE_4", "PHASE_3", "PHASE_2_3", "PHASE_2", "PHASE_1_2", "PHASE_1", "WITHDRAWAL", "UNKNOWN"]
+
+
+def _stage_sort_key(row: dict) -> tuple:
+    stage = row.get("phase")
+    rank = STAGE_ORDER.index(stage) if stage in STAGE_ORDER else len(STAGE_ORDER)
+    return (rank, ((row.get("drug") or {}).get("name") or "").upper())
+
+
 def _is_retryable(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in (429, 500, 502, 503, 504)
@@ -186,7 +196,7 @@ class OpenTargets:
         return search_data.get("hits", [])
 
     def target_info(self, ensembl_id: str) -> dict:
-        """Target details with up to 10 known drugs.
+        """Target details with up to 10 known drugs, most advanced stage first (count is the full total).
 
         knownDrugs now comes from drugAndClinicalCandidates: one row per drug with a
         `diseases` list (was one row per drug-disease pair with `disease`), and
@@ -197,7 +207,9 @@ class OpenTargets:
         target = data.get("target")
         known = (target or {}).get("knownDrugs")
         if known:
-            known["rows"] = known["rows"][:10]
+            for row in known["rows"]:
+                row["diseases"] = [d for d in row.get("diseases") or [] if d.get("disease")]
+            known["rows"] = sorted(known["rows"], key=_stage_sort_key)[:10]
         return target
 
     def disease_associations(self, ensembl_id: str, limit: int = 25) -> dict:
